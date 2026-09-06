@@ -382,6 +382,7 @@ void LauncherWindow::onExtractionComplete(const QString &destDir) {
     m_progressBar->setVisible(false);
     m_progressLabel->setText("");
 
+    bool saved = false;
     for (const auto &game : m_gameGrid->games()) {
         if (game.id == m_currentDownloadGameId) {
             LocalGame local;
@@ -396,8 +397,18 @@ void LauncherWindow::onExtractionComplete(const QString &destDir) {
             local.fileSize = game.fileSize;
             local.installedAt = QDateTime::currentDateTime();
             m_localDB->addGame(local);
+            saved = true;
             break;
         }
+    }
+
+    if (!saved && !m_currentDownloadName.isEmpty()) {
+        LocalGame local;
+        local.serverGameId = m_currentDownloadGameId;
+        local.name = m_currentDownloadName;
+        local.installPath = destDir;
+        local.installedAt = QDateTime::currentDateTime();
+        m_localDB->addGame(local);
     }
 
     m_gameGrid->refreshGrid();

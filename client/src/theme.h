@@ -49,6 +49,16 @@ public:
             QPushButton#playBtn:hover {
                 background-color: #00cc6a;
             }
+            QPushButton#installBtn {
+                background-color: #ffffff;
+                color: #000000;
+                border: none;
+                font-size: 12px;
+                padding: 10px 24px;
+            }
+            QPushButton#installBtn:hover {
+                background-color: #e0e0e0;
+            }
             QPushButton#updateBtn {
                 background-color: #ffaa00;
                 color: #000000;

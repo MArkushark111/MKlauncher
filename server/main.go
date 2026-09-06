@@ -132,7 +132,7 @@ func main() {
 	}
 	allowedOrigins := os.Getenv("MKGAMES_ALLOWED_ORIGINS")
 	if allowedOrigins == "" {
-		allowedOrigins = "http://localhost" + addr + ",http://127.0.0.1" + addr
+		allowedOrigins = "*"
 	}
 	origins := strings.Split(allowedOrigins, ",")
 	for i := range origins {

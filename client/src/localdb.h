@@ -58,14 +58,18 @@ public:
         q.addBindValue(game.category);
         q.addBindValue(game.tags);
         q.addBindValue(game.fileSize);
-        q.exec();
+        if (!q.exec()) {
+            qWarning() << "LocalDB addGame failed:" << q.lastError().text();
+        }
     }
 
     void removeGame(int serverGameId) {
         QSqlQuery q(m_db);
         q.prepare("DELETE FROM local_games WHERE server_game_id = ?");
         q.addBindValue(serverGameId);
-        q.exec();
+        if (!q.exec()) {
+            qWarning() << "LocalDB removeGame failed:" << q.lastError().text();
+        }
     }
 
     LocalGame getGame(int serverGameId) {
@@ -73,13 +77,14 @@ public:
         q.prepare("SELECT * FROM local_games WHERE server_game_id = ?");
         q.addBindValue(serverGameId);
         LocalGame game;
-        if (q.next()) {
+        if (q.exec() && q.next()) {
             game = fromQuery(q);
         }
         return game;
     }
 
     bool isInstalled(int serverGameId) {
+        if (!m_db.isOpen()) return false;
         QSqlQuery q(m_db);
         q.prepare("SELECT COUNT(*) FROM local_games WHERE server_game_id = ?");
         q.addBindValue(serverGameId);

@@ -90,16 +90,16 @@ func HandleAddGame(w http.ResponseWriter, r *http.Request) {
 	os.MkdirAll(storageDir, 0755)
 
 	if _, fh, err := r.FormFile("cover"); err == nil {
-		game.CoverURL = saveUploadedFile(fh, "storage", "covers", fmt.Sprintf("%d_cover", timeNowUnix()))
+		game.CoverURL = saveUploadedFile(fh, "storage/covers", fmt.Sprintf("%d_cover", timeNowUnix()))
 	}
 	if _, fh, err := r.FormFile("background"); err == nil {
-		game.BackgroundURL = saveUploadedFile(fh, "storage", "covers", fmt.Sprintf("%d_bg", timeNowUnix()))
+		game.BackgroundURL = saveUploadedFile(fh, "storage/covers", fmt.Sprintf("%d_bg", timeNowUnix()))
 	}
 	if _, fh, err := r.FormFile("logo"); err == nil {
-		game.LogoURL = saveUploadedFile(fh, "storage", "covers", fmt.Sprintf("%d_logo", timeNowUnix()))
+		game.LogoURL = saveUploadedFile(fh, "storage/covers", fmt.Sprintf("%d_logo", timeNowUnix()))
 	}
 	if _, fh, err := r.FormFile("wide_cover"); err == nil {
-		game.WideCoverURL = saveUploadedFile(fh, "storage", "covers", fmt.Sprintf("%d_wide", timeNowUnix()))
+		game.WideCoverURL = saveUploadedFile(fh, "storage/covers", fmt.Sprintf("%d_wide", timeNowUnix()))
 	}
 
 	files := r.MultipartForm.File["game_files"]
@@ -199,16 +199,16 @@ func HandleUpdateGame(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if _, fh, err := r.FormFile("cover"); err == nil {
-		game.CoverURL = saveUploadedFile(fh, "storage", "covers", fmt.Sprintf("%d_cover", timeNowUnix()))
+		game.CoverURL = saveUploadedFile(fh, "storage/covers", fmt.Sprintf("%d_cover", timeNowUnix()))
 	}
 	if _, fh, err := r.FormFile("background"); err == nil {
-		game.BackgroundURL = saveUploadedFile(fh, "storage", "covers", fmt.Sprintf("%d_bg", timeNowUnix()))
+		game.BackgroundURL = saveUploadedFile(fh, "storage/covers", fmt.Sprintf("%d_bg", timeNowUnix()))
 	}
 	if _, fh, err := r.FormFile("logo"); err == nil {
-		game.LogoURL = saveUploadedFile(fh, "storage", "covers", fmt.Sprintf("%d_logo", timeNowUnix()))
+		game.LogoURL = saveUploadedFile(fh, "storage/covers", fmt.Sprintf("%d_logo", timeNowUnix()))
 	}
 	if _, fh, err := r.FormFile("wide_cover"); err == nil {
-		game.WideCoverURL = saveUploadedFile(fh, "storage", "covers", fmt.Sprintf("%d_wide", timeNowUnix()))
+		game.WideCoverURL = saveUploadedFile(fh, "storage/covers", fmt.Sprintf("%d_wide", timeNowUnix()))
 	}
 
 	if err := db.DB.UpdateGame(game); err != nil {
@@ -578,11 +578,12 @@ func HandleUploadArchive(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-func saveUploadedFile(fh *multipart.FileHeader, dirs ...string) string {
-	dir := filepath.Join(dirs...)
+func saveUploadedFile(fh *multipart.FileHeader, dir string, namePrefix string) string {
 	os.MkdirAll(dir, 0755)
 
-	dstPath := filepath.Join(dir, fh.Filename)
+	ext := filepath.Ext(fh.Filename)
+	baseName := strings.TrimSuffix(fh.Filename, ext)
+	dstPath := filepath.Join(dir, fmt.Sprintf("%s_%s%s", namePrefix, baseName, ext))
 	dst, err := os.Create(dstPath)
 	if err != nil {
 		return ""

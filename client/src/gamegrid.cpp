@@ -234,8 +234,7 @@ QWidget* GameGrid::createGameCard(const ServerGame &game) {
     } else {
         QPushButton *downloadBtn = new QPushButton(
             QString("INSTALL - %1").arg(formatSize(game.fileSize)), btnWidget);
-        downloadBtn->setObjectName("playBtn");
-        downloadBtn->setStyleSheet(downloadBtn->styleSheet() + "font-size: 11px;");
+        downloadBtn->setObjectName("installBtn");
         downloadBtn->setCursor(Qt::PointingHandCursor);
         connect(downloadBtn, &QPushButton::clicked, [this, game]() {
             emit gameDownload(game.id, game.name,
