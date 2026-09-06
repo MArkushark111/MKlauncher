@@ -21,7 +21,7 @@ CONFIG_DIR="/etc/mkgames"
 SERVICE_FILE="/etc/systemd/system/mkgames.service"
 ADMIN_PASSCODE=""
 
-TOTAL_STEPS=9
+TOTAL_STEPS=10
 CURRENT_STEP=0
 
 print_banner() {
@@ -307,6 +307,32 @@ start_service() {
     step_done "Server started and enabled"
 }
 
+configure_wan() {
+    progress_bar 9 $TOTAL_STEPS "Configuring WAN address..."
+
+    SERVER_PORT="8080"
+    if [[ -f "$DATA_DIR/mkgames.db" ]]; then
+        CONFIGURED_PORT=$(sqlite3 "$DATA_DIR/mkgames.db" "SELECT wan_port FROM server_config WHERE id=1;" 2>/dev/null || true)
+        if [[ "$CONFIGURED_PORT" =~ ^[0-9]+$ ]] && (( CONFIGURED_PORT >= 1 && CONFIGURED_PORT <= 65535 )); then
+            SERVER_PORT="$CONFIGURED_PORT"
+        fi
+    fi
+
+    WAN_HOST=$(curl -4fsS --max-time 10 https://api.ipify.org 2>/dev/null || true)
+    if [[ ! "$WAN_HOST" =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+        WAN_HOST=$(hostname -I 2>/dev/null | awk '{print $1}')
+        step_warn "Public IP detection failed; using local address $WAN_HOST"
+    fi
+
+    if [[ "$WAN_HOST" =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+        sqlite3 "$DATA_DIR/mkgames.db" "UPDATE server_config SET wan_host='$WAN_HOST', wan_port='$SERVER_PORT' WHERE id=1;"
+        systemctl restart mkgames.service
+        step_done "WAN configured: $WAN_HOST:$SERVER_PORT"
+    else
+        step_warn "WAN address could not be detected; configure it in the admin panel"
+    fi
+}
+
 setup_logrotate() {
     progress_bar 7 $TOTAL_STEPS "Configuring log rotation..."
 
@@ -326,7 +352,7 @@ EOF
 }
 
 print_complete() {
-    progress_bar 9 $TOTAL_STEPS "Installation complete!"
+    progress_bar 10 $TOTAL_STEPS "Installation complete!"
 
     echo ""
     echo -e "${GREEN}╔══════════════════════════════════════════════════╗${NC}"
@@ -340,6 +366,7 @@ print_complete() {
     echo -e "  ${CYAN}4.${NC} Show WAN info:   ${BOLD}mkgames wan${NC}"
     echo -e "  ${CYAN}5.${NC} Admin panel:     ${BOLD}http://YOUR_IP:8080${NC}"
     echo ""
+    echo -e "  ${DIM}WAN address: run 'mklauncher wan'${NC}"
     echo -e "  ${DIM}Admin passcode: chosen during installation${NC}"
     echo -e "  ${DIM}Logs: $LOG_DIR/server.log${NC}"
     echo ""
@@ -361,6 +388,7 @@ main() {
     create_cli
     setup_logrotate
     start_service
+    configure_wan
     print_complete
 }
 
