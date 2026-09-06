@@ -25,3 +25,28 @@ server/mkgames-server.exe
 .idea/
 .DS_Store
 Thumbs.db
+
+# Go binaries and test artifacts
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+
+# Test binary, built with `go test -c`
+*.test
+
+# Code coverage profiles and other test artifacts
+*.out
+coverage.*
+*.coverprofile
+profile.cov
+
+# Dependency directories
+# vendor/
+
+# Go workspace file
+go.work
+go.work.sum
+
+.env
