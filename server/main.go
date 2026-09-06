@@ -117,7 +117,9 @@ func main() {
 		fileName := strings.TrimPrefix(r.URL.Path, "/covers/")
 		fileName = strings.TrimPrefix(fileName, "/")
 		directPath := filepath.Join(coversDir, fileName)
+		log.Printf("[COVERS] Request: %s -> looking for: %s", r.URL.Path, directPath)
 		if info, err := os.Stat(directPath); err == nil && !info.IsDir() {
+			log.Printf("[COVERS] Serving direct: %s", directPath)
 			http.ServeFile(w, r, directPath)
 			return
 		}
@@ -126,11 +128,13 @@ func main() {
 			if entry.IsDir() {
 				subPath := filepath.Join(coversDir, entry.Name(), fileName)
 				if info, err := os.Stat(subPath); err == nil && !info.IsDir() {
+					log.Printf("[COVERS] Serving from subdir: %s", subPath)
 					http.ServeFile(w, r, subPath)
 					return
 				}
 			}
 		}
+		log.Printf("[COVERS] NOT FOUND: %s", fileName)
 		http.NotFound(w, r)
 	})
 

@@ -130,12 +130,15 @@ void DownloadManager::onFinished() {
 
     for (auto it = m_downloads.begin(); it != m_downloads.end(); ++it) {
         if (it.value().reply == reply) {
+            qDebug() << "[DOWNLOAD] Finished. Error:" << reply->errorString() << "HTTP:" << reply->attribute(QNetworkRequest::HttpStatusCodeAttribute);
             if (reply->error() == QNetworkReply::NoError) {
                 it.value().file->flush();
                 it.value().file->close();
                 it.value().info.active = false;
+                qDebug() << "[DOWNLOAD] Saved to:" << it.value().info.savePath;
                 emit downloadComplete(it.key(), it.value().info.savePath);
             } else if (reply->error() != QNetworkReply::OperationCanceledError) {
+                qDebug() << "[DOWNLOAD] ERROR:" << reply->errorString();
                 it.value().info.error = true;
                 it.value().info.errorMsg = reply->errorString();
                 emit downloadError(it.key(), it.value().info.errorMsg);

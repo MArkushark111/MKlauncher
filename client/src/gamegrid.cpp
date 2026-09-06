@@ -158,7 +158,9 @@ QWidget* GameGrid::createGameCard(const ServerGame &game) {
     card->setContextMenuPolicy(Qt::CustomContextMenu);
 
     if (!game.coverUrl.isEmpty()) {
-        QNetworkRequest req(QUrl(imageUrl(game.coverUrl)));
+        QString url = imageUrl(game.coverUrl);
+        qDebug() << "[COVER] Loading cover for" << game.name << "URL:" << url;
+        QNetworkRequest req(QUrl(url));
         req.setTransferTimeout(10000);
         QNetworkReply *reply = m_coverManager->get(req);
         m_coverReplies[reply] = game.id;
@@ -257,6 +259,7 @@ QWidget* GameGrid::createGameCard(const ServerGame &game) {
 void GameGrid::onCoverLoaded(QNetworkReply *reply) {
     int gameId = m_coverReplies.take(reply);
     if (reply->error() != QNetworkReply::NoError) {
+        qDebug() << "[COVER] Failed to load cover for game" << gameId << ":" << reply->errorString() << "URL:" << reply->url();
         reply->deleteLater();
         return;
     }

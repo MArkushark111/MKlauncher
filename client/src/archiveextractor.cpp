@@ -48,10 +48,12 @@ bool ArchiveExtractor::extract(const QString &archivePath, const QString &destDi
 
     QFileInfo fi(archivePath);
     if (!fi.exists()) {
+        qDebug() << "[EXTRACTOR] Archive not found:" << archivePath;
         emit extractionError("Archive not found: " + archivePath);
         return false;
     }
 
+    qDebug() << "[EXTRACTOR] Starting extraction:" << archivePath << "->" << destDir << "Size:" << fi.size();
     QDir().mkpath(destDir);
     m_destDir = destDir;
     m_extracting = true;
@@ -59,6 +61,7 @@ bool ArchiveExtractor::extract(const QString &archivePath, const QString &destDi
     m_extractedFiles = 0;
 
     ArchiveType type = detectType(archivePath);
+    qDebug() << "[EXTRACTOR] Archive type:" << type;
     bool result = false;
 
     switch (type) {
@@ -89,6 +92,7 @@ bool ArchiveExtractor::extractZip(const QString &archive, const QString &dest) {
     QString tool = "unzip";
     args << "-o" << archive << "-d" << dest;
 #endif
+    qDebug() << "[EXTRACTOR] Running:" << tool << args.join(" ");
     m_process->start(tool, args);
 
     if (!m_process->waitForStarted()) {
@@ -214,6 +218,12 @@ void ArchiveExtractor::onProcessFinished(int exitCode, QProcess::ExitStatus exit
     QByteArray errOutput;
     if (m_process) {
         errOutput = m_process->readAllStandardError();
+    }
+
+    qDebug() << "[EXTRACTOR] Process finished. Exit code:" << exitCode << "Status:" << exitStatus;
+    qDebug() << "[EXTRACTOR] Files extracted:" << m_extractedFiles;
+    if (!errOutput.isEmpty()) {
+        qDebug() << "[EXTRACTOR] Stderr:" << QString::fromUtf8(errOutput).left(500);
     }
 
     m_extracting = false;

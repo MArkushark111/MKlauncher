@@ -724,6 +724,7 @@ void LauncherWindow::onGameDownload(int gameId, const QString &name, const QStri
     QString savePath = gameInstallPath(name) + ".zip";
     m_currentDownloadGameId = gameId;
     m_currentDownloadName = name;
+    qDebug() << "[DOWNLOAD] Starting download:" << name << "URL:" << url << "Save:" << savePath << "Size:" << size;
 
     m_progressBar->setVisible(true);
     m_progressBar->setValue(0);
@@ -778,10 +779,14 @@ void LauncherWindow::onDownloadProgress(int gameId, int percent, double speed, c
 }
 
 void LauncherWindow::onDownloadComplete(int gameId, const QString &filePath) {
+    qDebug() << "[DOWNLOAD] Complete for game" << gameId << "File:" << filePath;
+    QFileInfo fi(filePath);
+    qDebug() << "[DOWNLOAD] File exists:" << fi.exists() << "Size:" << fi.size();
     m_progressLabel->setText("Extracting: " + m_currentDownloadName);
     m_progressBar->setValue(0);
 
     QString destDir = gameInstallPath(m_currentDownloadName);
+    qDebug() << "[EXTRACT] Extracting to:" << destDir;
     m_pendingArchivePath = filePath;
     m_extractor->extract(filePath, destDir);
 }
@@ -793,6 +798,7 @@ void LauncherWindow::onDownloadError(int gameId, const QString &error) {
 }
 
 void LauncherWindow::onExtractionProgress(int percent, const QString &currentFile) {
+    qDebug() << "[EXTRACT] Progress:" << percent << "File:" << currentFile;
     if (percent >= 0) {
         m_progressBar->setValue(percent);
     }
@@ -802,6 +808,7 @@ void LauncherWindow::onExtractionProgress(int percent, const QString &currentFil
 }
 
 void LauncherWindow::onExtractionComplete(const QString &destDir) {
+    qDebug() << "[EXTRACT] Complete. Dest:" << destDir;
     if (!m_pendingArchivePath.isEmpty()) {
         QFile::remove(m_pendingArchivePath);
         m_pendingArchivePath.clear();
@@ -814,9 +821,13 @@ void LauncherWindow::onExtractionComplete(const QString &destDir) {
     QDir dest(destDir);
     QStringList entries = dest.entryList(QDir::Dirs | QDir::NoDotAndDotDot);
     QStringList files = dest.entryList(QDir::Files | QDir::NoDotAndDotDot);
+    qDebug() << "[EXTRACT] Dirs in dest:" << entries << "Files:" << files;
 
     if (entries.size() == 1 && files.isEmpty()) {
         actualInstallPath = dest.absoluteFilePath(entries.first());
+        qDebug() << "[EXTRACT] Detected single subfolder, adjusting install path to:" << actualInstallPath;
+        QDir subDest(actualInstallPath);
+        qDebug() << "[EXTRACT] Subfolder contents:" << subDest.entryList(QDir::Files | QDir::NoDotAndDotDot);
     }
 
     bool saved = false;
@@ -863,6 +874,7 @@ void LauncherWindow::onExtractionComplete(const QString &destDir) {
 }
 
 void LauncherWindow::onExtractionError(const QString &error) {
+    qDebug() << "[EXTRACT] ERROR:" << error;
     m_progressBar->setVisible(false);
     m_progressLabel->setText("");
     QMessageBox::warning(this, "Extraction Error", "Failed to extract: " + error);

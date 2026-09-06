@@ -32,6 +32,11 @@ func HandleListGames(w http.ResponseWriter, r *http.Request) {
 	if games == nil {
 		games = []db.Game{}
 	}
+	log.Printf("[API] Listing %d games", len(games))
+	for _, g := range games {
+		log.Printf("[API] Game %d: %s cover_url=%s archive=%s", g.ID, g.Name, g.CoverURL, g.ArchivePath)
+	}
+	}
 	json.NewEncoder(w).Encode(games)
 }
 
@@ -336,10 +341,12 @@ func HandleDownloadGame(w http.ResponseWriter, r *http.Request) {
 
 	game, err := db.DB.GetGame(id)
 	if err != nil {
+		log.Printf("[DOWNLOAD] Game not found: %d", id)
 		http.Error(w, "Game not found", http.StatusNotFound)
 		return
 	}
 
+	log.Printf("[DOWNLOAD] Game %d: archive=%s exists=%v", id, game.ArchivePath, fileExists(game.ArchivePath))
 	if game.ArchivePath == "" || !fileExists(game.ArchivePath) {
 		http.Error(w, "Archive not available", http.StatusNotFound)
 		return
