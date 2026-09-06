@@ -180,8 +180,15 @@ func loadLocalEnv() {
 	if err != nil {
 		return
 	}
-	envPath := filepath.Join(filepath.Dir(execPath), "server.env")
-	data, err := os.ReadFile(envPath)
+	envPaths := []string{filepath.Join(ConfigDir, "server.env"), filepath.Join(filepath.Dir(execPath), "server.env")}
+	var data []byte
+	var err error
+	for _, envPath := range envPaths {
+		data, err = os.ReadFile(envPath)
+		if err == nil {
+			break
+		}
+	}
 	if err != nil {
 		return
 	}

@@ -20,7 +20,7 @@ CONFIG_DIR="/etc/mkgames"
 SERVICE_FILE="/etc/systemd/system/mkgames.service"
 ADMIN_PASSCODE=""
 
-TOTAL_STEPS=8
+TOTAL_STEPS=9
 CURRENT_STEP=0
 
 print_banner() {
@@ -80,6 +80,14 @@ check_root() {
 }
 
 configure_admin_passcode() {
+    if [[ -f "$DATA_DIR/mkgames.db" ]] && command -v sqlite3 >/dev/null 2>&1; then
+        EXISTING_ADMINS=$(sqlite3 "$DATA_DIR/mkgames.db" "SELECT COUNT(*) FROM admins;" 2>/dev/null || echo 0)
+        if [[ "$EXISTING_ADMINS" =~ ^[1-9][0-9]*$ ]]; then
+            echo -e "${YELLOW}Existing admin database found; keeping the current admin passcode${NC}"
+            return
+        fi
+    fi
+
     while [[ -z "$ADMIN_PASSCODE" ]]; do
         read -r -s -p "Choose the initial admin passcode: " ADMIN_PASSCODE
         echo
@@ -111,10 +119,10 @@ install_dependencies() {
     progress_bar 1 $TOTAL_STEPS "Installing system dependencies..."
 
     step_info "Updating package lists..."
-    apt-get update -qq 2>/dev/null
+    apt-get update -qq
 
     step_info "Installing build tools..."
-    apt-get install -y -qq curl wget git build-essential 2>/dev/null
+    apt-get install -y -qq curl wget git build-essential ca-certificates
     step_done "Build tools installed"
 
     step_info "Installing Go..."
@@ -123,6 +131,7 @@ install_dependencies() {
     else
         GO_VERSION="1.21.6"
         wget -q "https://go.dev/dl/go${GO_VERSION}.linux-amd64.tar.gz" -O /tmp/go.tar.gz
+        rm -rf /usr/local/go
         tar -C /usr/local -xzf /tmp/go.tar.gz
         echo 'export PATH=$PATH:/usr/local/go/bin' >> /etc/profile.d/golang.sh
         export PATH=$PATH:/usr/local/go/bin
@@ -131,15 +140,15 @@ install_dependencies() {
     fi
 
     step_info "Installing SQLite..."
-    apt-get install -y -qq libsqlite3-dev sqlite3 2>/dev/null
+    apt-get install -y -qq libsqlite3-dev sqlite3
     step_done "SQLite installed"
 
     step_info "Installing archive tools..."
-    apt-get install -y -qq unzip unrar p7zip-full 2>/dev/null
+    apt-get install -y -qq unzip unrar p7zip-full
     step_done "Archive tools installed"
 
     step_info "Installing UFW firewall..."
-    apt-get install -y -qq ufw 2>/dev/null
+    apt-get install -y -qq ufw
     step_done "UFW installed"
 }
 
@@ -153,6 +162,16 @@ setup_directories() {
     mkdir -p "$DATA_DIR/games"
     mkdir -p "$DATA_DIR/archives"
     mkdir -p "$DATA_DIR/covers"
+    mkdir -p "$DATA_DIR/storage/games" "$DATA_DIR/storage/archives" "$DATA_DIR/storage/covers"
+
+    # Preserve uploads from older installs before replacing the app storage path.
+    if [[ -d "$INSTALL_DIR/storage" && ! -L "$INSTALL_DIR/storage" ]]; then
+        cp -a "$INSTALL_DIR/storage/." "$DATA_DIR/storage/"
+    fi
+
+    # The server stores uploaded files relative to its working directory.
+    rm -rf "$INSTALL_DIR/storage"
+    ln -s "$DATA_DIR/storage" "$INSTALL_DIR/storage"
 
     step_done "Application directory: $INSTALL_DIR"
     step_done "Data directory: $DATA_DIR"
@@ -172,18 +191,27 @@ build_server() {
 
     cd "$SERVER_DIR"
 
+    rm -f "$INSTALL_DIR/mkgames-server.new"
+    rm -rf "$INSTALL_DIR/admin-web.new"
+
     step_info "Downloading Go dependencies..."
     export PATH=$PATH:/usr/local/go/bin
-    go mod tidy 2>/dev/null
+    go mod download
     step_done "Dependencies downloaded"
 
     step_info "Compiling server binary..."
-    go build -o "$INSTALL_DIR/mkgames-server" . 2>/dev/null
+    go build -trimpath -o "$INSTALL_DIR/mkgames-server.new" .
+    chmod 0755 "$INSTALL_DIR/mkgames-server.new"
+    mv -f "$INSTALL_DIR/mkgames-server.new" "$INSTALL_DIR/mkgames-server"
     step_done "Server built: $INSTALL_DIR/mkgames-server"
 
-    cp -r "$SCRIPT_DIR/admin/web" "$INSTALL_DIR/admin-web"
-    printf 'MKGAMES_ADMIN_PASSCODE=%s\n' "$ADMIN_PASSCODE" > "$CONFIG_DIR/server.env"
-    chmod 600 "$CONFIG_DIR/server.env"
+    cp -a "$SCRIPT_DIR/admin/web" "$INSTALL_DIR/admin-web.new"
+    rm -rf "$INSTALL_DIR/admin-web"
+    mv "$INSTALL_DIR/admin-web.new" "$INSTALL_DIR/admin-web"
+    if [[ -n "$ADMIN_PASSCODE" ]]; then
+        printf 'MKGAMES_ADMIN_PASSCODE=%s\n' "$ADMIN_PASSCODE" > "$CONFIG_DIR/server.env"
+        chmod 600 "$CONFIG_DIR/server.env"
+    fi
     step_done "Admin assets copied"
 
     cd "$SCRIPT_DIR"
@@ -215,18 +243,34 @@ EOF
 
     systemctl daemon-reload
     systemctl enable mkgames.service
+    if ! systemctl cat mkgames.service >/dev/null 2>&1; then
+        echo -e "${RED}Systemd unit was not created correctly${NC}"
+        exit 1
+    fi
     step_done "Systemd service created and enabled"
 }
 
 setup_firewall() {
     progress_bar 5 $TOTAL_STEPS "Configuring firewall..."
 
-    step_info "Opening port 8080..."
-    ufw allow 8080/tcp 2>/dev/null
-    step_done "Port 8080 opened"
+    SERVER_PORT="8080"
+    if [[ -f "$DATA_DIR/mkgames.db" ]] && command -v sqlite3 >/dev/null 2>&1; then
+        CONFIGURED_PORT=$(sqlite3 "$DATA_DIR/mkgames.db" "SELECT wan_port FROM server_config WHERE id=1;" 2>/dev/null || true)
+        if [[ "$CONFIGURED_PORT" =~ ^[0-9]+$ ]] && (( CONFIGURED_PORT >= 1 && CONFIGURED_PORT <= 65535 )); then
+            SERVER_PORT="$CONFIGURED_PORT"
+        fi
+    fi
+
+    step_info "Opening server port $SERVER_PORT..."
+    ufw allow "$SERVER_PORT/tcp"
+    step_done "Port $SERVER_PORT opened"
+
+    step_info "Allowing SSH before enabling firewall..."
+    ufw allow OpenSSH || ufw allow 22/tcp
+    step_done "SSH access allowed"
 
     step_info "Enabling UFW..."
-    echo "y" | ufw enable 2>/dev/null
+    ufw --force enable
     step_done "Firewall enabled"
 }
 
@@ -241,6 +285,20 @@ CLIEOF
     chmod +x /usr/local/bin/mkgames
     ln -sf /usr/local/bin/mkgames /usr/local/bin/mklauncher
     step_done "CLI tools installed: /usr/local/bin/mkgames and /usr/local/bin/mklauncher"
+}
+
+start_service() {
+    progress_bar 8 $TOTAL_STEPS "Starting server..."
+
+    systemctl daemon-reload
+    systemctl enable mkgames.service
+    if ! systemctl restart mkgames.service; then
+        echo -e "${RED}Server failed to start. Recent logs:${NC}"
+        journalctl -u mkgames.service -n 40 --no-pager || true
+        exit 1
+    fi
+    systemctl is-active --quiet mkgames.service
+    step_done "Server started and enabled"
 }
 
 setup_logrotate() {
@@ -262,7 +320,7 @@ EOF
 }
 
 print_complete() {
-    progress_bar 8 $TOTAL_STEPS "Installation complete!"
+    progress_bar 9 $TOTAL_STEPS "Installation complete!"
 
     echo ""
     echo -e "${GREEN}╔══════════════════════════════════════════════════╗${NC}"
@@ -279,23 +337,24 @@ print_complete() {
     echo -e "  ${DIM}Admin passcode: chosen during installation${NC}"
     echo -e "  ${DIM}Logs: $LOG_DIR/server.log${NC}"
     echo ""
-    echo -e "  ${YELLOW}Run 'systemctl start mkgames' to start the server now${NC}"
+    echo -e "  ${YELLOW}Server is running. Use 'systemctl status mkgames' to check it${NC}"
     echo ""
 }
 
 main() {
     print_banner
     check_root
-    configure_admin_passcode
     detect_os
     echo ""
     install_dependencies
     setup_directories
+    configure_admin_passcode
     build_server
     setup_service
     setup_firewall
     create_cli
     setup_logrotate
+    start_service
     print_complete
 }
 
