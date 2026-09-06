@@ -702,8 +702,15 @@ void LauncherWindow::launchGame(const QString &exePath, const QString &installPa
     QString fullPath = installPath + "/" + exePath;
     QFileInfo fi(fullPath);
     if (!fi.exists()) {
-        QMessageBox::warning(this, "Error", "Game executable not found: " + fullPath);
-        return;
+        QDir searchDir(installPath);
+        QString exeName = QFileInfo(exePath).fileName();
+        QStringList found = searchDir.entryList(QStringList() << exeName, QDir::Files, QDir::Name);
+        if (!found.isEmpty()) {
+            fullPath = searchDir.absoluteFilePath(found.first());
+        } else {
+            QMessageBox::warning(this, "Error", "Game executable not found: " + fullPath);
+            return;
+        }
     }
 
 #ifdef Q_OS_WIN
@@ -803,13 +810,22 @@ void LauncherWindow::onExtractionComplete(const QString &destDir) {
     m_progressBar->setVisible(false);
     m_progressLabel->setText("");
 
+    QString actualInstallPath = destDir;
+    QDir dest(destDir);
+    QStringList entries = dest.entryList(QDir::Dirs | QDir::NoDotAndDotDot);
+    QStringList files = dest.entryList(QDir::Files | QDir::NoDotAndDotDot);
+
+    if (entries.size() == 1 && files.isEmpty()) {
+        actualInstallPath = dest.absoluteFilePath(entries.first());
+    }
+
     bool saved = false;
     for (const auto &game : m_gameGrid->games()) {
         if (game.id == m_currentDownloadGameId) {
             LocalGame local;
             local.serverGameId = game.id;
             local.name = game.name;
-            local.installPath = destDir;
+            local.installPath = actualInstallPath;
             local.version = game.version;
             local.exePath = game.exePath;
             local.coverUrl = game.coverUrl;
@@ -817,6 +833,16 @@ void LauncherWindow::onExtractionComplete(const QString &destDir) {
             local.tags = game.tags;
             local.fileSize = game.fileSize;
             local.installedAt = QDateTime::currentDateTime();
+
+            QString testPath = actualInstallPath + "/" + game.exePath;
+            if (!QFileInfo::exists(testPath) && !game.exePath.isEmpty()) {
+                QDir searchDir(actualInstallPath);
+                QStringList found = searchDir.entryList(QStringList() << QFileInfo(game.exePath).fileName(), QDir::Files);
+                if (!found.isEmpty()) {
+                    local.exePath = found.first();
+                }
+            }
+
             m_localDB->addGame(local);
             saved = true;
             break;
@@ -827,7 +853,7 @@ void LauncherWindow::onExtractionComplete(const QString &destDir) {
         LocalGame local;
         local.serverGameId = m_currentDownloadGameId;
         local.name = m_currentDownloadName;
-        local.installPath = destDir;
+        local.installPath = actualInstallPath;
         local.installedAt = QDateTime::currentDateTime();
         m_localDB->addGame(local);
     }

@@ -197,6 +197,9 @@ QWidget* GameGrid::createGameCard(const ServerGame &game) {
         QPushButton *playBtn = new QPushButton("PLAY", btnWidget);
         playBtn->setObjectName("playBtn");
         playBtn->setCursor(Qt::PointingHandCursor);
+        playBtn->setStyleSheet(
+            "QPushButton#playBtn { background-color: #00ff88; color: #000000; border: none; border-radius: 4px; font-size: 14px; padding: 10px 24px; }"
+            "QPushButton#playBtn:hover { background-color: #00cc6a; }");
         connect(playBtn, &QPushButton::clicked, [this, game, localGame]() {
             emit gamePlay(game.id, game.name, game.exePath, localGame.installPath);
         });
@@ -235,6 +238,9 @@ QWidget* GameGrid::createGameCard(const ServerGame &game) {
             QString("INSTALL - %1").arg(formatSize(game.fileSize)), btnWidget);
         downloadBtn->setObjectName("installBtn");
         downloadBtn->setCursor(Qt::PointingHandCursor);
+        downloadBtn->setStyleSheet(
+            "QPushButton#installBtn { background-color: #ffffff; color: #000000; border: none; border-radius: 4px; font-size: 12px; padding: 10px 24px; font-weight: bold; }"
+            "QPushButton#installBtn:hover { background-color: #e0e0e0; }");
         connect(downloadBtn, &QPushButton::clicked, [this, game]() {
             emit gameDownload(game.id, game.name,
                             m_serverUrl + "/api/games/" + QString::number(game.id) + "/download",
@@ -283,7 +289,11 @@ QString GameGrid::formatSize(qint64 bytes) const {
 
 QString GameGrid::imageUrl(const QString &url) const {
     if (url.startsWith("http://") || url.startsWith("https://")) return url;
-    return m_serverUrl + "/" + url.trimmed().trimmed().replace(QRegularExpression("^/+"), "");
+    QString path = url.trimmed().replace(QRegularExpression("^/+"), "");
+    if (path.startsWith("storage/covers/")) {
+        path = path.mid(QString("storage/").length());
+    }
+    return m_serverUrl + "/" + path;
 }
 
 void GameGrid::filterByText(const QString &text) {

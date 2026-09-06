@@ -78,6 +78,7 @@ bool ArchiveExtractor::extract(const QString &archivePath, const QString &destDi
 bool ArchiveExtractor::extractZip(const QString &archive, const QString &dest) {
     m_process = new QProcess(this);
     connect(m_process, &QProcess::readyReadStandardOutput, this, &ArchiveExtractor::onProcessReadyRead);
+    connect(m_process, &QProcess::readyReadStandardError, this, &ArchiveExtractor::onProcessReadyRead);
     connect(m_process, &QProcess::finished, this, &ArchiveExtractor::onProcessFinished);
 
     QStringList args;
@@ -195,12 +196,16 @@ void ArchiveExtractor::onProcessReadyRead() {
         emit extractionProgress(pct, "");
     }
 
-    QRegularExpression fileRe("\\s+(.+)$");
+    QRegularExpression inflating("inflating:\\s+(.+)$");
+    QRegularExpression extracting("extracting:\\s+(.+)$");
     for (const QString &line : output.split('\n')) {
-        QRegularExpressionMatch fm = fileRe.match(line.trimmed());
+        QString trimmed = line.trimmed();
+        QRegularExpressionMatch fm = inflating.match(trimmed);
+        if (!fm.hasMatch()) fm = extracting.match(trimmed);
         if (fm.hasMatch() && !fm.captured(1).isEmpty()) {
             m_extractedFiles++;
-            emit extractionProgress(-1, fm.captured(1));
+            QFileInfo fi(fm.captured(1).trimmed());
+            emit extractionProgress(-1, fi.fileName());
         }
     }
 }
