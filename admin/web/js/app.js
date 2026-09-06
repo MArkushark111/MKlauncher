@@ -447,7 +447,13 @@ async function uploadFileWithRetry(session, file, path, index, total) {
                 headers: { 'Authorization': 'Bearer ' + authToken },
                 body: form
             });
-            const data = await response.json();
+            const responseText = await response.text();
+            let data = {};
+            try {
+                data = responseText ? JSON.parse(responseText) : {};
+            } catch (parseError) {
+                throw new Error(responseText || `HTTP ${response.status}`);
+            }
             if (!response.ok || data.error) {
                 if (response.status === 409 && Number.isFinite(data.offset)) {
                     offset = data.offset;
@@ -459,7 +465,10 @@ async function uploadFileWithRetry(session, file, path, index, total) {
             const completed = filesUploadedBytes + offset;
             document.getElementById('add-progress-fill').style.width = Math.round(completed / filesTotalBytes * 100) + '%';
             document.getElementById('add-progress-text').textContent = `Uploading ${index + 1} / ${total}: ${path}`;
-            if (offset >= file.size) return;
+            if (offset >= file.size) {
+                filesUploadedBytes += file.size;
+                return;
+            }
             attempt = 0;
         } catch (error) {
             if (attempt === 5) throw error;
