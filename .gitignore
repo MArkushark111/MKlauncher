@@ -1,0 +1,27 @@
+# Qt and CMake build output
+**/build/
+**/build-*/
+*.user
+*.user.*
+
+# Local databases and runtime data
+*.db
+*.db-shm
+*.db-wal
+server/storage/archives/*
+server/storage/covers/*
+server/storage/games/*
+
+# Local credentials and environment files
+*.env
+server.env
+
+# Go build output
+server/mkgames-server
+server/mkgames-server.exe
+
+# IDE and OS files
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db

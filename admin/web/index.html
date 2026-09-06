@@ -1,0 +1,341 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MKGames Admin</title>
+    <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+    <div id="auth-screen" class="screen active">
+        <div class="auth-box">
+            <div class="logo-container">
+                <h1 class="logo-text">MK<span class="accent">GAMES</span></h1>
+                <p class="subtitle">ADMIN CONTROL PANEL</p>
+            </div>
+            <div class="input-group">
+                <input type="password" id="passcode-input" placeholder="Enter admin passcode" maxlength="20">
+                <button id="auth-btn" class="btn btn-primary" onclick="authenticate()">
+                    <span class="btn-text">AUTHENTICATE</span>
+                    <div class="btn-loader hidden"></div>
+                </button>
+            </div>
+            <p id="auth-error" class="error-text hidden">Invalid passcode</p>
+        </div>
+    </div>
+
+    <div id="admin-screen" class="screen hidden">
+        <nav class="sidebar">
+            <div class="sidebar-logo">
+                <h2>MK<span class="accent">GAMES</span></h2>
+            </div>
+            <ul class="nav-list">
+                <li class="nav-item active" onclick="showTab('dashboard')">
+                    <span class="nav-icon">&#9632;</span> Dashboard
+                </li>
+                <li class="nav-item" onclick="showTab('games')">
+                    <span class="nav-icon">&#9654;</span> Games
+                </li>
+                <li class="nav-item" onclick="showTab('add-game')">
+                    <span class="nav-icon">&#43;</span> Add Game
+                </li>
+                <li class="nav-item" onclick="showTab('archives')">
+                    <span class="nav-icon">&#128230;</span> Archives
+                </li>
+                <li class="nav-item" onclick="showTab('admins')">
+                    <span class="nav-icon">&#128100;</span> Admins
+                </li>
+                <li class="nav-item" onclick="showTab('config')">
+                    <span class="nav-icon">&#9881;</span> Config
+                </li>
+                <li class="nav-item" onclick="showTab('notifications')">
+                    <span class="nav-icon">&#128276;</span> Notifications
+                </li>
+            </ul>
+            <div class="sidebar-footer">
+                <button class="btn btn-danger btn-sm" onclick="logout()">LOGOUT</button>
+            </div>
+        </nav>
+
+        <main class="content">
+            <div id="tab-dashboard" class="tab active">
+                <h2 class="tab-title">SERVER DASHBOARD</h2>
+                <div class="stats-grid">
+                    <div class="stat-card">
+                        <div class="stat-value" id="stat-games">0</div>
+                        <div class="stat-label">TOTAL GAMES</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-value" id="stat-downloads">0</div>
+                        <div class="stat-label">TOTAL DOWNLOADS</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-value" id="stat-today">0</div>
+                        <div class="stat-label">TODAY</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-value" id="stat-week">0</div>
+                        <div class="stat-label">THIS WEEK</div>
+                    </div>
+                </div>
+                <div class="card">
+                    <h3>TOP GAMES</h3>
+                    <div id="top-games-list"></div>
+                </div>
+                <div class="card">
+                    <h3>SERVER STATUS</h3>
+                    <div id="health-status"></div>
+                </div>
+            </div>
+
+            <div id="tab-games" class="tab hidden">
+                <h2 class="tab-title">GAME MANAGEMENT</h2>
+                <div class="search-bar">
+                    <input type="text" id="game-search" placeholder="Search games..." oninput="filterGames()">
+                </div>
+                <div id="games-list" class="games-grid"></div>
+            </div>
+
+            <div id="tab-add-game" class="tab hidden">
+                <h2 class="tab-title">ADD NEW GAME</h2>
+                <div class="form-container">
+                    <div class="form-steps">
+                        <div class="step active" id="step-1"><span>1</span> Basic Info</div>
+                        <div class="step" id="step-2"><span>2</span> Archive</div>
+                        <div class="step" id="step-3"><span>3</span> Images</div>
+                        <div class="step" id="step-4"><span>4</span> Confirm</div>
+                    </div>
+
+                    <div id="add-form-step-1" class="form-step active">
+                        <div class="form-group">
+                            <label>GAME NAME *</label>
+                            <input type="text" id="game-name" placeholder="Enter game name">
+                        </div>
+                        <div class="form-group">
+                            <label>DESCRIPTION</label>
+                            <textarea id="game-desc" placeholder="Game description"></textarea>
+                        </div>
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label>VERSION</label>
+                                <input type="text" id="game-version" placeholder="1.0.0" value="1.0.0">
+                            </div>
+                            <div class="form-group">
+                                <label>CATEGORY</label>
+                                <select id="game-category">
+                                    <option value="">Select category</option>
+                                    <option value="action">Action</option>
+                                    <option value="rpg">RPG</option>
+                                    <option value="strategy">Strategy</option>
+                                    <option value="simulation">Simulation</option>
+                                    <option value="adventure">Adventure</option>
+                                    <option value="puzzle">Puzzle</option>
+                                    <option value="sports">Sports</option>
+                                    <option value="racing">Racing</option>
+                                    <option value="horror">Horror</option>
+                                    <option value="other">Other</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div class="form-group">
+                            <label>TAGS (comma separated)</label>
+                            <input type="text" id="game-tags" placeholder="multiplayer, co-op, open world">
+                        </div>
+                        <button class="btn btn-primary" onclick="nextStep(2)">NEXT STEP</button>
+                    </div>
+
+                    <div id="add-form-step-2" class="form-step hidden">
+                        <div class="form-group">
+                            <label>UPLOAD ARCHIVE</label>
+                            <div class="upload-zone" id="archive-upload-zone" onclick="document.getElementById('archive-file').click()">
+                                <input type="file" id="archive-file" accept=".zip,.rar,.7z,.tar,.gz,.tar.gz,.tgz" onchange="handleArchiveSelect(this)" style="display:none">
+                                <div class="upload-icon">&#128230;</div>
+                                <p>Click to select archive</p>
+                                <p class="upload-hint">ZIP, RAR, 7Z, TAR.GZ supported</p>
+                            </div>
+                            <div id="archive-info" class="hidden">
+                                <p id="archive-name"></p>
+                                <p id="archive-size"></p>
+                            </div>
+                        </div>
+                        <div class="form-group">
+                            <label>GAME FOLDER (inside archive)</label>
+                            <div class="input-with-btn">
+                                <input type="text" id="game-folder" placeholder="Select folder from archive" readonly>
+                                <button class="btn btn-secondary" onclick="browseArchive()">BROWSE</button>
+                            </div>
+                        </div>
+                        <div class="form-group">
+                            <label>GAME EXECUTABLE</label>
+                            <div class="input-with-btn">
+                                <input type="text" id="game-exe" placeholder="Select .exe file" readonly>
+                                <button class="btn btn-secondary" onclick="browseForExe()">BROWSE</button>
+                            </div>
+                        </div>
+                        <div class="form-nav">
+                            <button class="btn btn-secondary" onclick="prevStep(1)">BACK</button>
+                            <button class="btn btn-primary" onclick="nextStep(3)">NEXT STEP</button>
+                        </div>
+                    </div>
+
+                    <div id="add-form-step-3" class="form-step hidden">
+                        <div class="images-grid">
+                            <div class="image-upload">
+                                <label>COVER IMAGE</label>
+                                <div class="img-upload-zone" onclick="document.getElementById('cover-file').click()">
+                                    <input type="file" id="cover-file" accept="image/*" onchange="previewImage(this, 'cover-preview')" style="display:none">
+                                    <img id="cover-preview" class="hidden">
+                                    <div class="img-placeholder">400x600</div>
+                                </div>
+                            </div>
+                            <div class="image-upload">
+                                <label>BACKGROUND IMAGE</label>
+                                <div class="img-upload-zone" onclick="document.getElementById('bg-file').click()">
+                                    <input type="file" id="bg-file" accept="image/*" onchange="previewImage(this, 'bg-preview')" style="display:none">
+                                    <img id="bg-preview" class="hidden">
+                                    <div class="img-placeholder">1920x1080</div>
+                                </div>
+                            </div>
+                            <div class="image-upload">
+                                <label>LOGO</label>
+                                <div class="img-upload-zone" onclick="document.getElementById('logo-file').click()">
+                                    <input type="file" id="logo-file" accept="image/*" onchange="previewImage(this, 'logo-preview')" style="display:none">
+                                    <img id="logo-preview" class="hidden">
+                                    <div class="img-placeholder">400x200</div>
+                                </div>
+                            </div>
+                            <div class="image-upload">
+                                <label>WIDE COVER</label>
+                                <div class="img-upload-zone" onclick="document.getElementById('wide-file').click()">
+                                    <input type="file" id="wide-file" accept="image/*" onchange="previewImage(this, 'wide-preview')" style="display:none">
+                                    <img id="wide-preview" class="hidden">
+                                    <div class="img-placeholder">800x350</div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="form-nav">
+                            <button class="btn btn-secondary" onclick="prevStep(2)">BACK</button>
+                            <button class="btn btn-primary" onclick="nextStep(4)">NEXT STEP</button>
+                        </div>
+                    </div>
+
+                    <div id="add-form-step-4" class="form-step hidden">
+                        <div class="confirm-summary" id="game-summary"></div>
+                        <div class="progress-container hidden" id="add-progress">
+                            <div class="progress-bar">
+                                <div class="progress-fill" id="add-progress-fill"></div>
+                            </div>
+                            <p id="add-progress-text">Uploading...</p>
+                        </div>
+                        <div class="form-nav">
+                            <button class="btn btn-secondary" onclick="prevStep(3)">BACK</button>
+                            <button class="btn btn-primary" id="add-game-btn" onclick="submitGame()">ADD GAME</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div id="tab-archives" class="tab hidden">
+                <h2 class="tab-title">ARCHIVE MANAGEMENT</h2>
+                <div class="upload-section">
+                    <div class="upload-zone" onclick="document.getElementById('direct-upload').click()">
+                        <input type="file" id="direct-upload" accept=".zip,.rar,.7z,.tar,.gz,.tar.gz,.tgz" style="display:none" onchange="uploadArchiveDirect(this)">
+                        <div class="upload-icon">&#128228;</div>
+                        <p>Drop or click to upload archive to server</p>
+                    </div>
+                    <div class="progress-container hidden" id="upload-progress">
+                        <div class="progress-bar">
+                            <div class="progress-fill" id="upload-progress-fill"></div>
+                        </div>
+                        <p id="upload-progress-text">Uploading...</p>
+                    </div>
+                </div>
+                <div id="archives-list" class="archives-list"></div>
+            </div>
+
+            <div id="tab-admins" class="tab hidden">
+                <h2 class="tab-title">ADMIN MANAGEMENT</h2>
+                <div class="card">
+                    <h3>ADD NEW ADMIN</h3>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label>USERNAME</label>
+                            <input type="text" id="new-admin-user" placeholder="Username">
+                        </div>
+                        <div class="form-group">
+                            <label>PASSCODE</label>
+                            <input type="password" id="new-admin-pass" placeholder="Passcode">
+                        </div>
+                        <div class="form-group" style="align-self:flex-end">
+                            <button class="btn btn-primary" onclick="addAdmin()">ADD ADMIN</button>
+                        </div>
+                    </div>
+                </div>
+                <div class="card">
+                    <h3>EXISTING ADMINS</h3>
+                    <div id="admins-list"></div>
+                </div>
+            </div>
+
+            <div id="tab-config" class="tab hidden">
+                <h2 class="tab-title">SERVER CONFIGURATION</h2>
+                <div class="card">
+                    <div class="form-group">
+                        <label>WAN HOST</label>
+                        <input type="text" id="cfg-wan-host" placeholder="e.g. 203.0.113.50">
+                    </div>
+                    <div class="form-group">
+                        <label>WAN PORT</label>
+                        <input type="text" id="cfg-wan-port" placeholder="8080" value="8080">
+                    </div>
+                    <div class="form-group">
+                        <label>SERVER NAME</label>
+                        <input type="text" id="cfg-server-name" placeholder="MKGames Server">
+                    </div>
+                    <div class="form-group">
+                        <label>MAX UPLOAD SIZE (MB)</label>
+                        <input type="number" id="cfg-max-upload" value="4096">
+                    </div>
+                    <button class="btn btn-primary" onclick="saveConfig()">SAVE CONFIG</button>
+                    <button class="btn btn-danger" onclick="applyAndRestartServer()">APPLY &amp; RESTART SERVER</button>
+                </div>
+                <div class="card">
+                    <h3>WAN INFO</h3>
+                        <p id="wan-display" class="wan-text">Configure WAN host to display connection info</p>
+                        <button class="btn btn-secondary btn-sm" onclick="copyWanAddress()">COPY WAN ADDRESS</button>
+                </div>
+            </div>
+
+            <div id="tab-notifications" class="tab hidden">
+                <h2 class="tab-title">NOTIFICATIONS</h2>
+                <div id="notifications-list"></div>
+            </div>
+        </main>
+    </div>
+
+    <div id="browse-modal" class="modal hidden">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>BROWSE ARCHIVE</h3>
+                <button class="modal-close" onclick="closeModal()">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div id="browse-path" class="browse-path"></div>
+                <div id="browse-items" class="browse-items"></div>
+            </div>
+        </div>
+    </div>
+
+    <div id="edit-modal" class="modal hidden">
+        <div class="modal-content modal-lg">
+            <div class="modal-header">
+                <h3>EDIT GAME</h3>
+                <button class="modal-close" onclick="closeEditModal()">&times;</button>
+            </div>
+            <div class="modal-body" id="edit-form"></div>
+        </div>
+    </div>
+
+    <script src="js/app.js"></script>
+</body>
+</html>

@@ -1,0 +1,226 @@
+#include "archiveextractor.h"
+#include <QFileInfo>
+#include <QProcess>
+#include <QDebug>
+#include <QRegularExpression>
+
+ArchiveExtractor::ArchiveExtractor(QObject *parent) : QObject(parent) {}
+
+static QString findTool(const QString &name) {
+#ifdef Q_OS_WIN
+    QStringList paths = {
+        "C:/Program Files/7-Zip/7z.exe",
+        "C:/Program Files (x86)/7-Zip/7z.exe",
+        "C:/Program Files/WinRAR/UnRAR.exe",
+        "C:/Program Files/WinRAR/unrar.exe",
+    };
+    for (const QString &p : paths) {
+        if (QFileInfo::exists(p)) return p;
+    }
+    return name;
+#else
+    return name;
+#endif
+}
+
+ArchiveExtractor::ArchiveType ArchiveExtractor::detectType(const QString &path) {
+    QString lower = path.toLower();
+    if (lower.endsWith(".zip")) return ZIP;
+    if (lower.endsWith(".rar")) return RAR;
+    if (lower.endsWith(".7z")) return SEVENZ;
+    if (lower.endsWith(".tar.gz") || lower.endsWith(".tgz") || lower.endsWith(".tar")) return TARGZ;
+    return UNKNOWN;
+}
+
+bool ArchiveExtractor::isSupported(const QString &path) {
+    return detectType(path) != UNKNOWN;
+}
+
+QStringList ArchiveExtractor::supportedExtensions() {
+    return {"*.zip", "*.rar", "*.7z", "*.tar.gz", "*.tgz", "*.tar"};
+}
+
+bool ArchiveExtractor::extract(const QString &archivePath, const QString &destDir, const QString &subfolder) {
+    if (m_extracting) {
+        emit extractionError("Already extracting");
+        return false;
+    }
+
+    QFileInfo fi(archivePath);
+    if (!fi.exists()) {
+        emit extractionError("Archive not found: " + archivePath);
+        return false;
+    }
+
+    QDir().mkpath(destDir);
+    m_destDir = destDir;
+    m_extracting = true;
+    m_totalFiles = 0;
+    m_extractedFiles = 0;
+
+    ArchiveType type = detectType(archivePath);
+    bool result = false;
+
+    switch (type) {
+        case ZIP: result = extractZip(archivePath, destDir); break;
+        case RAR: result = extractRar(archivePath, destDir); break;
+        case SEVENZ: result = extract7z(archivePath, destDir); break;
+        case TARGZ: result = extractTarGz(archivePath, destDir); break;
+        default:
+            m_extracting = false;
+            emit extractionError("Unsupported archive format");
+            return false;
+    }
+
+    return result;
+}
+
+bool ArchiveExtractor::extractZip(const QString &archive, const QString &dest) {
+    m_process = new QProcess(this);
+    connect(m_process, &QProcess::readyReadStandardOutput, this, &ArchiveExtractor::onProcessReadyRead);
+    connect(m_process, &QProcess::finished, this, &ArchiveExtractor::onProcessFinished);
+
+    QStringList args;
+#ifdef Q_OS_WIN
+    QString tool = findTool("7z");
+    args << "x" << "-y" << ("-o" + dest) << archive;
+#else
+    QString tool = "unzip";
+    args << "-o" << dest << "-x" << archive;
+#endif
+    m_process->start(tool, args);
+
+    if (!m_process->waitForStarted()) {
+        m_extracting = false;
+        emit extractionError("Failed to start extraction tool. Install 7-Zip or unzip.");
+        m_process->deleteLater();
+        m_process = nullptr;
+        return false;
+    }
+    return true;
+}
+
+bool ArchiveExtractor::extractRar(const QString &archive, const QString &dest) {
+    m_process = new QProcess(this);
+    connect(m_process, &QProcess::readyReadStandardOutput, this, &ArchiveExtractor::onProcessReadyRead);
+    connect(m_process, &QProcess::finished, this, &ArchiveExtractor::onProcessFinished);
+
+    QStringList args;
+#ifdef Q_OS_WIN
+    QString tool = findTool("unrar");
+    args << "x" << "-o+" << "-y" << archive << dest;
+#else
+    QString tool = "unrar";
+    args << "x" << "-o+" << "-y" << archive << dest;
+#endif
+    m_process->start(tool, args);
+
+    if (!m_process->waitForStarted()) {
+        m_extracting = false;
+        emit extractionError("Failed to start unrar. Install with: sudo apt install unrar");
+        m_process->deleteLater();
+        m_process = nullptr;
+        return false;
+    }
+    return true;
+}
+
+bool ArchiveExtractor::extract7z(const QString &archive, const QString &dest) {
+    m_process = new QProcess(this);
+    connect(m_process, &QProcess::readyReadStandardOutput, this, &ArchiveExtractor::onProcessReadyRead);
+    connect(m_process, &QProcess::finished, this, &ArchiveExtractor::onProcessFinished);
+
+    QStringList args;
+#ifdef Q_OS_WIN
+    QString tool = findTool("7z");
+#else
+    QString tool = "7z";
+#endif
+    args << "x" << "-y" << ("-o" + dest) << archive;
+    m_process->start(tool, args);
+
+    if (!m_process->waitForStarted()) {
+        m_extracting = false;
+        emit extractionError("Failed to start 7z. Install with: sudo apt install p7zip-full");
+        m_process->deleteLater();
+        m_process = nullptr;
+        return false;
+    }
+    return true;
+}
+
+bool ArchiveExtractor::extractTarGz(const QString &archive, const QString &dest) {
+    m_process = new QProcess(this);
+    connect(m_process, &QProcess::readyReadStandardOutput, this, &ArchiveExtractor::onProcessReadyRead);
+    connect(m_process, &QProcess::finished, this, &ArchiveExtractor::onProcessFinished);
+
+    QStringList args;
+#ifdef Q_OS_WIN
+    QString tool = findTool("7z");
+    args << "x" << "-y" << ("-o" + dest) << archive;
+#else
+    QString tool = "tar";
+    args << "-xzf" << archive << "-C" << dest;
+#endif
+    m_process->start(tool, args);
+
+    if (!m_process->waitForStarted()) {
+        m_extracting = false;
+        emit extractionError("Failed to start extraction tool");
+        m_process->deleteLater();
+        m_process = nullptr;
+        return false;
+    }
+    return true;
+}
+
+bool ArchiveExtractor::cancelExtraction() {
+    if (m_process && m_extracting) {
+        m_process->kill();
+        m_process->waitForFinished(3000);
+        m_extracting = false;
+        return true;
+    }
+    return false;
+}
+
+void ArchiveExtractor::onProcessReadyRead() {
+    if (!m_process) return;
+
+    QString output = QString::fromUtf8(m_process->readAllStandardOutput());
+    QRegularExpression re("(\\d+)\\%");
+    QRegularExpressionMatch match = re.match(output);
+    if (match.hasMatch()) {
+        int pct = match.captured(1).toInt();
+        emit extractionProgress(pct, "");
+    }
+
+    QRegularExpression fileRe("\\s+(.+)$");
+    for (const QString &line : output.split('\n')) {
+        QRegularExpressionMatch fm = fileRe.match(line.trimmed());
+        if (fm.hasMatch() && !fm.captured(1).isEmpty()) {
+            m_extractedFiles++;
+            emit extractionProgress(-1, fm.captured(1));
+        }
+    }
+}
+
+void ArchiveExtractor::onProcessFinished(int exitCode, QProcess::ExitStatus exitStatus) {
+    QByteArray errOutput;
+    if (m_process) {
+        errOutput = m_process->readAllStandardError();
+    }
+
+    m_extracting = false;
+    if (m_process) {
+        m_process->deleteLater();
+        m_process = nullptr;
+    }
+
+    if (exitStatus == QProcess::NormalExit && exitCode == 0) {
+        emit extractionProgress(100, "");
+        emit extractionComplete(m_destDir);
+    } else {
+        emit extractionError("Extraction failed (exit code " + QString::number(exitCode) + "): " + QString::fromUtf8(errOutput));
+    }
+}
