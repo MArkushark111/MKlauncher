@@ -586,11 +586,24 @@ function loadArchives() {
             return;
         }
         data.forEach(a => {
+            const safeName = a.name.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
             list.innerHTML += `<div class="archive-item">
                 <span class="name">${a.name}</span>
                 <span class="size">${formatSize(a.size)}</span>
+                <button class="btn btn-danger btn-sm" onclick="deleteArchive('${safeName}')">DELETE</button>
             </div>`;
         });
+    });
+}
+
+function deleteArchive(name) {
+    if (!confirm('Delete archive "' + name + '"?\n\nThis cannot be undone.')) return;
+    api('POST', '/api/archives/delete', { name: name }).then(data => {
+        if (data.error) { alert('Error: ' + data.error); return; }
+        alert('Archive deleted');
+        loadArchives();
+    }).catch(e => {
+        alert('Delete failed: ' + e.message);
     });
 }
 

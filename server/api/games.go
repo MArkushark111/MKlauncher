@@ -578,6 +578,37 @@ func HandleUploadArchive(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+func HandleDeleteArchive(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+
+	var req struct {
+		Name string `json:"name"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req.Name == "" {
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(map[string]string{"error": "Archive name required"})
+		return
+	}
+
+	archivesDir := "storage/archives"
+	targetPath := filepath.Join(archivesDir, filepath.Base(req.Name))
+
+	if !strings.HasPrefix(targetPath, archivesDir) {
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(map[string]string{"error": "Invalid archive path"})
+		return
+	}
+
+	if err := os.Remove(targetPath); err != nil {
+		w.WriteHeader(http.StatusNotFound)
+		json.NewEncoder(w).Encode(map[string]string{"error": "Archive not found"})
+		return
+	}
+
+	log.Printf("[API] Archive deleted: %s", req.Name)
+	json.NewEncoder(w).Encode(map[string]string{"message": "Archive deleted"})
+}
+
 func saveUploadedFile(fh *multipart.FileHeader, dir string, namePrefix string) string {
 	os.MkdirAll(dir, 0755)
 
