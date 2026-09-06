@@ -49,6 +49,7 @@ private:
     QStackedWidget *m_stack;
     QWidget *m_connectPage;
     QWidget *m_mainPage;
+    QWidget *m_settingsPage;
     QLineEdit *m_urlInput;
     QPushButton *m_connectBtn;
     QLabel *m_statusLabel;
@@ -77,6 +78,7 @@ private:
 
     void setupConnectPage();
     void setupMainPage();
+    void setupSettingsPage();
     void connectToServer(const QString &url, const QString &passcode);
     void refreshGames();
     void resetConnection();
