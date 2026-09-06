@@ -425,20 +425,37 @@ function buildSummary() {
         <p><span class="label">Executable: </span>${exe || 'None'}</p>`;
 }
 
-function submitGame() {
+let currentUploadSession = '';
+
+async function uploadFileWithRetry(session, file, path, index, total) {
+    for (let attempt = 1; attempt <= 5; attempt++) {
+        try {
+            const form = new FormData();
+            form.append('path', path);
+            form.append('file', file, path);
+            const response = await fetch(API + '/api/uploads/' + encodeURIComponent(session) + '/file', {
+                method: 'POST',
+                headers: { 'Authorization': 'Bearer ' + authToken },
+                body: form
+            });
+            const data = await response.json();
+            if (!response.ok || data.error) throw new Error(data.error || `HTTP ${response.status}`);
+            document.getElementById('add-progress-fill').style.width = Math.round((index + 1) / total * 100) + '%';
+            document.getElementById('add-progress-text').textContent = `Uploaded ${index + 1} / ${total}: ${path}`;
+            return;
+        } catch (error) {
+            if (attempt === 5) throw error;
+            document.getElementById('add-progress-text').textContent = `Connection lost. Retrying ${path} (${attempt}/5)...`;
+            await new Promise(resolve => setTimeout(resolve, Math.min(15000, 1000 * 2 ** (attempt - 1))));
+        }
+    }
+}
+
+async function submitGame() {
     const btn = document.getElementById('add-game-btn');
     const progress = document.getElementById('add-progress');
     btn.disabled = true;
     progress.classList.remove('hidden');
-
-    const fd = new FormData();
-    fd.append('name', document.getElementById('game-name').value);
-    fd.append('description', document.getElementById('game-desc').value);
-    fd.append('version', document.getElementById('game-version').value);
-    fd.append('category', document.getElementById('game-category').value);
-    fd.append('tags', document.getElementById('game-tags').value);
-    fd.append('game_folder', document.getElementById('game-folder').value);
-    fd.append('exe_path', document.getElementById('game-exe').value);
 
     const folderFiles = document.getElementById('game-folder-files').files;
     if (folderFiles.length === 0) {
@@ -447,60 +464,40 @@ function submitGame() {
         progress.classList.add('hidden');
         return;
     }
-    for (const file of folderFiles) {
-        fd.append('game_files', file, file.webkitRelativePath || file.name);
-    }
-
-    const coverFile = document.getElementById('cover-file').files[0];
-    if (coverFile) fd.append('cover', coverFile);
-
-    const bgFile = document.getElementById('bg-file').files[0];
-    if (bgFile) fd.append('background', bgFile);
-
-    const logoFile = document.getElementById('logo-file').files[0];
-    if (logoFile) fd.append('logo', logoFile);
-
-    const wideFile = document.getElementById('wide-file').files[0];
-    if (wideFile) fd.append('wide_cover', wideFile);
-
-    const xhr = new XMLHttpRequest();
-    xhr.open('POST', API + '/api/games');
-    xhr.setRequestHeader('Authorization', 'Bearer ' + authToken);
-
-    xhr.upload.onprogress = e => {
-        if (e.lengthComputable) {
-            const pct = Math.round(e.loaded / e.total * 100);
-            document.getElementById('add-progress-fill').style.width = pct + '%';
-            document.getElementById('add-progress-text').textContent = `Uploading... ${pct}% (${formatSize(e.loaded)} / ${formatSize(e.total)})`;
+    const session = currentUploadSession || (crypto.randomUUID ? crypto.randomUUID() : Date.now().toString(36) + Math.random().toString(36).slice(2));
+    currentUploadSession = session;
+    const files = Array.from(folderFiles);
+    const paths = files.map(file => file.webkitRelativePath || file.name);
+    try {
+        for (let index = 0; index < files.length; index++) {
+            await uploadFileWithRetry(session, files[index], paths[index], index, files.length);
         }
-    };
-
-    xhr.onload = function() {
-        btn.disabled = false;
-        progress.classList.add('hidden');
-        let data;
-        try {
-            data = JSON.parse(xhr.responseText);
-        } catch (error) {
-            alert(`Upload failed (HTTP ${xhr.status})`);
-            return;
-        }
-        if (data.error) {
-            alert(`Upload failed (HTTP ${xhr.status}): ${data.error}`);
-            return;
-        }
+        const response = await fetch(API + '/api/uploads/' + encodeURIComponent(session) + '/finalize', {
+            method: 'POST',
+            headers: { 'Authorization': 'Bearer ' + authToken, 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                name: document.getElementById('game-name').value,
+                description: document.getElementById('game-desc').value,
+                version: document.getElementById('game-version').value,
+                category: document.getElementById('game-category').value,
+                tags: document.getElementById('game-tags').value,
+                game_folder: document.getElementById('game-folder').value,
+                exe_path: document.getElementById('game-exe').value,
+                files: paths
+            })
+        });
+        const data = await response.json();
+        if (!response.ok || data.error) throw new Error(data.error || `HTTP ${response.status}`);
         alert('Game "' + data.name + '" added successfully!');
+        currentUploadSession = '';
         resetAddForm();
         showTab('games');
-    };
-
-    xhr.onerror = function() {
+    } catch (error) {
+        alert('Upload paused: ' + error.message + '. Submit again to retry missing files.');
+    } finally {
         btn.disabled = false;
         progress.classList.add('hidden');
-        alert('Upload failed: network error or the server closed the connection');
-    };
-
-    xhr.send(fd);
+    }
 }
 
 function resetAddForm() {
@@ -512,6 +509,7 @@ function resetAddForm() {
     document.getElementById('game-folder').value = '';
     document.getElementById('game-exe').value = '';
     document.getElementById('game-folder-files').value = '';
+    currentUploadSession = '';
     ['cover-preview', 'bg-preview', 'logo-preview', 'wide-preview'].forEach(id => {
         const el = document.getElementById(id);
         el.classList.add('hidden');
