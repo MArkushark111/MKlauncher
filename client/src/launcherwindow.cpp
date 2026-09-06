@@ -270,7 +270,7 @@ void LauncherWindow::launchGame(const QString &exePath, const QString &installPa
 }
 
 void LauncherWindow::onGameDownload(int gameId, const QString &name, const QString &url, qint64 size) {
-    QString savePath = gameInstallPath(name) + ".download";
+    QString savePath = gameInstallPath(name) + ".zip";
     m_currentDownloadGameId = gameId;
     m_currentDownloadName = name;
 
