@@ -727,6 +727,19 @@ function applyAndRestartServer() {
     });
 }
 
+function wipeServer() {
+    if (!confirm('WARNING: This will permanently delete ALL games, archives, covers, and reset the database.\n\nThis CANNOT be undone. Type "yes" in the next prompt to confirm.')) return;
+    const confirm2 = prompt('Type YES to confirm full server wipe:');
+    if (confirm2 !== 'YES') { alert('Wipe cancelled.'); return; }
+    api('POST', '/api/server/wipe').then(data => {
+        if (data.error) { alert('Error: ' + data.error); return; }
+        alert('Server wiped successfully. Refreshing...');
+        location.reload();
+    }).catch(e => {
+        alert('Wipe failed: ' + e.message);
+    });
+}
+
 function copyWanAddress() {
     const address = document.getElementById('wan-display').textContent.trim();
     if (!address || address.startsWith('Configure')) return;

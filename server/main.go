@@ -109,6 +109,7 @@ func main() {
 	router.HandleFunc("/api/config", api.RequireAuth(api.HandleGetConfig)).Methods("GET")
 	router.HandleFunc("/api/config", api.RequireAuth(api.HandleUpdateConfig)).Methods("PUT")
 	router.HandleFunc("/api/server/restart", api.RequireAuth(api.HandleRestartServer)).Methods("POST")
+	router.HandleFunc("/api/server/wipe", api.RequireAuth(api.HandleWipeServer)).Methods("POST")
 	router.HandleFunc("/api/notifications", api.RequireAuth(api.HandleGetNotifications)).Methods("GET")
 
 	router.PathPrefix("/covers/").HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

@@ -299,6 +299,11 @@
                     <button class="btn btn-primary" onclick="saveConfig()">SAVE CONFIG</button>
                     <button class="btn btn-danger" onclick="applyAndRestartServer()">APPLY &amp; RESTART SERVER</button>
                 </div>
+                <div class="card" style="border-color:#ff4444;">
+                    <h3 style="color:#ff4444;">DANGER ZONE</h3>
+                    <p style="color:var(--text-dim);">Permanently delete ALL games, archives, covers, and reset the database. This cannot be undone.</p>
+                    <button class="btn btn-danger" onclick="wipeServer()">FULLY WIPE SERVER</button>
+                </div>
                 <div class="card">
                     <h3>WAN INFO</h3>
                         <p id="wan-display" class="wan-text">Configure WAN host to display connection info</p>

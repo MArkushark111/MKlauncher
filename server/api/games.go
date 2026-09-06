@@ -717,3 +717,30 @@ func fileExists(path string) bool {
 func timeNowUnix() int64 {
 	return time.Now().Unix()
 }
+
+func HandleWipeServer(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+
+	storageDirs := []string{
+		"storage/games",
+		"storage/archives",
+		"storage/covers",
+	}
+	for _, dir := range storageDirs {
+		if err := os.RemoveAll(dir); err != nil {
+			log.Printf("[API] Wipe: failed to remove %s: %v", dir, err)
+		}
+		os.MkdirAll(dir, 0755)
+	}
+
+	tables := []string{"games", "game_versions", "downloads", "notifications"}
+	for _, table := range tables {
+		_, err := DB.Conn.Exec("DELETE FROM " + table)
+		if err != nil {
+			log.Printf("[API] Wipe: failed to clear table %s: %v", table, err)
+		}
+	}
+
+	log.Printf("[API] Server wiped by admin")
+	json.NewEncoder(w).Encode(map[string]string{"message": "Server wiped successfully"})
+}
