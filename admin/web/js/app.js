@@ -246,6 +246,16 @@ function handleArchiveSelect(input) {
     }
 }
 
+function handleFolderSelect(input) {
+    if (input.files.length === 0) return;
+    const firstPath = input.files[0].webkitRelativePath || input.files[0].name;
+    const root = firstPath.split('/')[0];
+    document.getElementById('game-folder').value = root;
+    document.getElementById('archive-name').textContent = `${input.files.length} files from ${root}`;
+    document.getElementById('archive-size').textContent = formatSize(Array.from(input.files).reduce((sum, file) => sum + file.size, 0));
+    document.getElementById('archive-info').classList.remove('hidden');
+}
+
 function previewImage(input, previewId) {
     if (input.files && input.files[0]) {
         const reader = new FileReader();
@@ -376,6 +386,11 @@ function submitGame() {
 
     const archiveFile = document.getElementById('archive-file').files[0];
     if (archiveFile) fd.append('archive', archiveFile);
+
+    const folderFiles = document.getElementById('game-folder-files').files;
+    for (const file of folderFiles) {
+        fd.append('game_files', file, file.webkitRelativePath || file.name);
+    }
 
     const coverFile = document.getElementById('cover-file').files[0];
     if (coverFile) fd.append('cover', coverFile);

@@ -1,6 +1,8 @@
 package api
 
 import (
+	"archive/tar"
+	"compress/gzip"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -58,7 +60,7 @@ func HandleGetGame(w http.ResponseWriter, r *http.Request) {
 func HandleAddGame(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 
-	if err := r.ParseMultipartForm(64 << 20); err != nil {
+	if err := r.ParseMultipartForm(4096 << 20); err != nil {
 		w.WriteHeader(http.StatusBadRequest)
 		json.NewEncoder(w).Encode(map[string]string{"error": "Invalid form data"})
 		return
@@ -115,6 +117,24 @@ func HandleAddGame(w http.ResponseWriter, r *http.Request) {
 		written, _ := io.Copy(dst, src)
 		game.ArchivePath = archivePath
 		game.FileSize = written
+	}
+	if game.ArchivePath == "" {
+		files := r.MultipartForm.File["game_files"]
+		if len(files) > 0 {
+			archivePath, written, archiveErr := saveFolderArchive(game.Name, game.Version, files)
+			if archiveErr != nil {
+				w.WriteHeader(http.StatusBadRequest)
+				json.NewEncoder(w).Encode(map[string]string{"error": archiveErr.Error()})
+				return
+			}
+			game.ArchivePath = archivePath
+			game.FileSize = written
+		}
+	}
+	if game.ArchivePath == "" {
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(map[string]string{"error": "Select an archive or a game folder"})
+		return
 	}
 
 	if config != nil && config.WANHost != "" && config.WANPort != "" {
@@ -582,6 +602,59 @@ func saveUploadedFile(fh *multipart.FileHeader, dirs ...string) string {
 
 	io.Copy(dst, src)
 	return dstPath
+}
+
+func saveFolderArchive(gameName, version string, files []*multipart.FileHeader) (string, int64, error) {
+	archiveDir := filepath.Join("storage", "archives")
+	if err := os.MkdirAll(archiveDir, 0755); err != nil {
+		return "", 0, err
+	}
+	archivePath := filepath.Join(archiveDir, fmt.Sprintf("%s_%s.tar.gz", sanitizeName(gameName), sanitizeName(version)))
+	dst, err := os.Create(archivePath)
+	if err != nil {
+		return "", 0, err
+	}
+	defer dst.Close()
+	gz := gzip.NewWriter(dst)
+	archive := tar.NewWriter(gz)
+	for _, fh := range files {
+		relativePath := strings.TrimPrefix(filepath.ToSlash(fh.Filename), "/")
+		if relativePath == "" || strings.Contains(relativePath, "../") {
+			continue
+		}
+		src, openErr := fh.Open()
+		if openErr != nil {
+			archive.Close()
+			gz.Close()
+			return "", 0, openErr
+		}
+		header := &tar.Header{Name: relativePath, Mode: 0755, Size: fh.Size, ModTime: time.Now()}
+		if writeErr := archive.WriteHeader(header); writeErr != nil {
+			src.Close()
+			archive.Close()
+			gz.Close()
+			return "", 0, writeErr
+		}
+		_, copyErr := io.Copy(archive, src)
+		src.Close()
+		if copyErr != nil {
+			archive.Close()
+			gz.Close()
+			return "", 0, copyErr
+		}
+	}
+	if err := archive.Close(); err != nil {
+		gz.Close()
+		return "", 0, err
+	}
+	if err := gz.Close(); err != nil {
+		return "", 0, err
+	}
+	info, err := os.Stat(archivePath)
+	if err != nil {
+		return "", 0, err
+	}
+	return archivePath, info.Size(), nil
 }
 
 func saveGameVersionArchive(gameID int, version string, fh *multipart.FileHeader) (string, int64, error) {

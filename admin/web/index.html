@@ -153,15 +153,21 @@
                                 <p>Click to select archive</p>
                                 <p class="upload-hint">ZIP, RAR, 7Z, TAR.GZ supported</p>
                             </div>
+                            <div class="upload-zone" onclick="document.getElementById('game-folder-files').click()">
+                                <input type="file" id="game-folder-files" webkitdirectory directory multiple onchange="handleFolderSelect(this)" style="display:none">
+                                <div class="upload-icon">&#128193;</div>
+                                <p>Or select a regular game folder</p>
+                                <p class="upload-hint">The server will package it automatically</p>
+                            </div>
                             <div id="archive-info" class="hidden">
                                 <p id="archive-name"></p>
                                 <p id="archive-size"></p>
                             </div>
                         </div>
                         <div class="form-group">
-                            <label>GAME FOLDER (inside archive)</label>
+                            <label>GAME FOLDER</label>
                             <div class="input-with-btn">
-                                <input type="text" id="game-folder" placeholder="Select folder from archive" readonly>
+                                <input type="text" id="game-folder" placeholder="Folder inside archive or uploaded folder" readonly>
                                 <button class="btn btn-secondary" onclick="browseArchive()">BROWSE</button>
                             </div>
                         </div>
