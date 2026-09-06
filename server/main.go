@@ -110,9 +110,27 @@ func main() {
 	router.HandleFunc("/api/server/restart", api.RequireAuth(api.HandleRestartServer)).Methods("POST")
 	router.HandleFunc("/api/notifications", api.RequireAuth(api.HandleGetNotifications)).Methods("GET")
 
-	router.PathPrefix("/covers/").Handler(
-		http.StripPrefix("/covers/", http.FileServer(http.Dir(filepath.Join(StorageDir, "covers")))),
-	)
+	router.PathPrefix("/covers/").HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		coversDir := filepath.Join(StorageDir, "covers")
+		fileName := strings.TrimPrefix(r.URL.Path, "/covers/")
+		fileName = strings.TrimPrefix(fileName, "/")
+		directPath := filepath.Join(coversDir, fileName)
+		if info, err := os.Stat(directPath); err == nil && !info.IsDir() {
+			http.ServeFile(w, r, directPath)
+			return
+		}
+		entries, _ := os.ReadDir(coversDir)
+		for _, entry := range entries {
+			if entry.IsDir() {
+				subPath := filepath.Join(coversDir, entry.Name(), fileName)
+				if info, err := os.Stat(subPath); err == nil && !info.IsDir() {
+					http.ServeFile(w, r, subPath)
+					return
+				}
+			}
+		}
+		http.NotFound(w, r)
+	})
 
 	router.PathPrefix("/").HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/" && !strings.HasPrefix(r.URL.Path, "/api/") {

@@ -43,6 +43,7 @@ public:
                 background-color: #00ff88;
                 color: #000000;
                 border: none;
+                border-radius: 4px;
                 font-size: 14px;
                 padding: 10px 24px;
             }
@@ -53,6 +54,7 @@ public:
                 background-color: #ffffff;
                 color: #000000;
                 border: none;
+                border-radius: 4px;
                 font-size: 12px;
                 padding: 10px 24px;
             }

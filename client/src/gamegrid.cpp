@@ -132,8 +132,8 @@ QWidget* GameGrid::createGameCard(const ServerGame &game) {
     card->setStyleSheet(R"(
         #gameCard {
             background-color: #1a1a1a;
-            border: 1px solid #2a2a2a;
-            border-radius: 8px;
+            border: 1px solid #333333;
+            border-radius: 12px;
         }
         #gameCard:hover {
             border-color: #00ff88;
@@ -146,10 +146,9 @@ QWidget* GameGrid::createGameCard(const ServerGame &game) {
 
     QLabel *coverLabel = new QLabel(card);
     coverLabel->setFixedHeight(160);
-    coverLabel->setStyleSheet("background-color: #111111; border-top-left-radius: 8px; border-top-right-radius: 8px;");
+    coverLabel->setStyleSheet("background-color: #111111; border-top-left-radius: 12px; border-top-right-radius: 12px; color: #555555; font-size: 12px;");
     coverLabel->setAlignment(Qt::AlignCenter);
     coverLabel->setText("LOADING...");
-    coverLabel->setStyleSheet(coverLabel->styleSheet() + "color: #555555; font-size: 12px;");
     layout->addWidget(coverLabel);
     m_coverLabels[game.id] = coverLabel;
 
