@@ -13,6 +13,7 @@
 #include <QDir>
 #include <QFileInfo>
 #include <QDebug>
+#include <QDialog>
 
 LauncherWindow::LauncherWindow(QWidget *parent) : QMainWindow(parent) {
     setWindowTitle("MKLAUNCHER");
@@ -161,6 +162,7 @@ void LauncherWindow::setupMainPage() {
     auto *settingsBtn = new QPushButton("SETTINGS");
     settingsBtn->setCursor(Qt::PointingHandCursor);
     connect(settingsBtn, &QPushButton::clicked, [this]() {
+		resetConnection();
         m_stack->setCurrentIndex(0);
     });
     headerLayout->addWidget(settingsBtn);
@@ -175,6 +177,7 @@ void LauncherWindow::setupMainPage() {
     connect(m_gameGrid, &GameGrid::gamesLoadError, this, [this](const QString &error) {
         m_progressLabel->setText(error.isEmpty() ? QString() : "Server error: " + error);
     });
+    connect(m_gameGrid, &GameGrid::gameDetails, this, &LauncherWindow::onGameDetails);
     layout->addWidget(m_gameGrid);
 }
 
@@ -212,6 +215,26 @@ void LauncherWindow::connectToServer(const QString &url, const QString &passcode
     request.setHeader(QNetworkRequest::ContentTypeHeader, "application/json");
     request.setTransferTimeout(10000);
     m_authManager->post(request, QJsonDocument(obj).toJson());
+}
+
+void LauncherWindow::resetConnection() {
+    m_authToken.clear();
+    m_settings.setAuthToken(QString());
+    m_settings.setConnected(false);
+    m_connectBtn->setEnabled(true);
+    m_statusLabel->setText("Enter a server address");
+    m_stack->setCurrentIndex(0);
+}
+
+void LauncherWindow::onGameDetails(const ServerGame &game) {
+    QMessageBox box(this);
+    box.setWindowTitle(game.name);
+    box.setText(QString("%1\nVersion %2\n%3\n\n%4\n\nExecutable: %5")
+        .arg(game.name, game.version, game.category.isEmpty() ? "Uncategorized" : game.category,
+             game.description.isEmpty() ? "No description available." : game.description,
+             game.exePath.isEmpty() ? "Not specified" : game.exePath));
+    box.setInformativeText(QString("Downloads: %1\nSize: %2").arg(game.downloadCount).arg(game.fileSize));
+    box.exec();
 }
 
 void LauncherWindow::onAuthResult(QNetworkReply *reply) {

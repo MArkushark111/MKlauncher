@@ -53,6 +53,7 @@ signals:
     void gameUpdate(int gameId, const QString &name, const QString &localVersion, const QString &serverVersion, const QString &url);
     void gameUninstall(int gameId, const QString &name, const QString &installPath);
     void gamesLoadError(const QString &error);
+    void gameDetails(const ServerGame &game);
 
 private slots:
     void onGamesLoaded(QNetworkReply *reply);
@@ -71,12 +72,14 @@ private:
     QString m_serverUrl;
     QString m_token;
     QMap<QNetworkReply*, int> m_coverReplies;
+    QMap<int, QLabel*> m_coverLabels;
     QString m_searchFilter;
     QString m_statusFilter;
 
     void buildGrid();
     QWidget* createGameCard(const ServerGame &game);
     QString formatSize(qint64 bytes) const;
+    QString imageUrl(const QString &url) const;
 };
 
 #endif

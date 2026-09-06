@@ -151,9 +151,15 @@ QWidget* GameGrid::createGameCard(const ServerGame &game) {
     coverLabel->setText("LOADING...");
     coverLabel->setStyleSheet(coverLabel->styleSheet() + "color: #555555; font-size: 12px;");
     layout->addWidget(coverLabel);
+    m_coverLabels[game.id] = coverLabel;
+
+    connect(card, &QWidget::customContextMenuRequested, this, [this, game](const QPoint &) {
+        emit gameDetails(game);
+    });
+    card->setContextMenuPolicy(Qt::CustomContextMenu);
 
     if (!game.coverUrl.isEmpty()) {
-        QNetworkRequest req(QUrl(game.coverUrl));
+        QNetworkRequest req(QUrl(imageUrl(game.coverUrl)));
         req.setTransferTimeout(10000);
         QNetworkReply *reply = m_coverManager->get(req);
         m_coverReplies[reply] = game.id;
@@ -258,12 +264,9 @@ void GameGrid::onCoverLoaded(QNetworkReply *reply) {
 
     if (pixmap.isNull()) return;
     m_covers[gameId] = pixmap;
-
-    for (int i = 0; i < m_grid->count(); ++i) {
-        QLayoutItem *item = m_grid->itemAt(i);
-        if (item && item->widget()) {
-            item->widget()->update();
-        }
+	if (m_coverLabels.contains(gameId)) {
+		m_coverLabels[gameId]->setPixmap(pixmap.scaled(m_coverLabels[gameId]->size(), Qt::KeepAspectRatioByExpanding, Qt::SmoothTransformation));
+		m_coverLabels[gameId]->setText(QString());
     }
 }
 
@@ -278,6 +281,11 @@ QString GameGrid::formatSize(qint64 bytes) const {
     if (bytes < 1048576) return QString::number(bytes / 1024.0, 'f', 1) + " KB";
     if (bytes < 1073741824) return QString::number(bytes / 1048576.0, 'f', 1) + " MB";
     return QString::number(bytes / 1073741824.0, 'f', 2) + " GB";
+}
+
+QString GameGrid::imageUrl(const QString &url) const {
+    if (url.startsWith("http://") || url.startsWith("https://")) return url;
+    return m_serverUrl + "/" + url.trimmed().trimmed().replace(QRegularExpression("^/+"), "");
 }
 
 void GameGrid::filterByText(const QString &text) {

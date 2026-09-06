@@ -43,6 +43,7 @@ private slots:
     void checkLauncherUpdates();
     void onSearchChanged(const QString &text);
     void onFilterChanged(int index);
+    void onGameDetails(const ServerGame &game);
 
 private:
     QStackedWidget *m_stack;
@@ -78,6 +79,7 @@ private:
     void setupMainPage();
     void connectToServer(const QString &url, const QString &passcode);
     void refreshGames();
+    void resetConnection();
     void launchGame(const QString &exePath, const QString &installPath);
     void showNotification(const QString &title, const QString &msg);
     QString gameInstallPath(const QString &name);

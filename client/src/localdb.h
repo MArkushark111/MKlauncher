@@ -8,6 +8,8 @@
 #include <QVariant>
 #include <QDebug>
 #include <QDir>
+#include <QStandardPaths>
+#include <QUuid>
 
 struct LocalGame {
     int id = 0;
@@ -27,9 +29,11 @@ struct LocalGame {
 class LocalDB : public QObject {
     Q_OBJECT
 public:
-    explicit LocalDB(QObject *parent = nullptr) : QObject(parent) {
-        m_db = QSqlDatabase::addDatabase("QSQLITE");
-        QString path = QDir::currentPath() + "/mkgames_local.db";
+    explicit LocalDB(QObject *parent = nullptr) : QObject(parent), m_connectionName(QUuid::createUuid().toString(QUuid::WithoutBraces)) {
+        m_db = QSqlDatabase::addDatabase("QSQLITE", m_connectionName);
+        QString basePath = QStandardPaths::writableLocation(QStandardPaths::AppDataLocation);
+        QDir().mkpath(basePath);
+        QString path = QDir(basePath).filePath("mkgames_local.db");
         m_db.setDatabaseName(path);
         if (!m_db.open()) {
             qWarning() << "Local DB error:" << m_db.lastError().text();
@@ -38,7 +42,7 @@ public:
         initSchema();
     }
 
-    ~LocalDB() { m_db.close(); }
+    ~LocalDB() { m_db.close(); m_db = QSqlDatabase(); QSqlDatabase::removeDatabase(m_connectionName); }
 
     void addGame(const LocalGame &game) {
         QSqlQuery q(m_db);
@@ -111,6 +115,7 @@ public:
 
 private:
     QSqlDatabase m_db;
+    QString m_connectionName;
 
     void initSchema() {
         QSqlQuery q(m_db);
