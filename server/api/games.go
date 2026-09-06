@@ -36,7 +36,6 @@ func HandleListGames(w http.ResponseWriter, r *http.Request) {
 	for _, g := range games {
 		log.Printf("[API] Game %d: %s cover_url=%s archive=%s", g.ID, g.Name, g.CoverURL, g.ArchivePath)
 	}
-	}
 	json.NewEncoder(w).Encode(games)
 }
 
