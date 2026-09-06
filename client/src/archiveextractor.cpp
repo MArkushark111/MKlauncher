@@ -86,7 +86,7 @@ bool ArchiveExtractor::extractZip(const QString &archive, const QString &dest) {
     args << "x" << "-y" << ("-o" + dest) << archive;
 #else
     QString tool = "unzip";
-    args << "-o" << dest << "-x" << archive;
+    args << "-o" << archive << "-d" << dest;
 #endif
     m_process->start(tool, args);
 

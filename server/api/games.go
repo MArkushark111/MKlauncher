@@ -1,8 +1,7 @@
 package api
 
 import (
-	"archive/tar"
-	"compress/gzip"
+	"archive/zip"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -103,37 +102,33 @@ func HandleAddGame(w http.ResponseWriter, r *http.Request) {
 		game.WideCoverURL = saveUploadedFile(fh, "storage", "covers", fmt.Sprintf("%d_wide", timeNowUnix()))
 	}
 
-	if _, fh, err := r.FormFile("archive"); err == nil {
-		archivePath := filepath.Join("storage", "archives", fmt.Sprintf("%s_%s", sanitizeName(game.Name), fh.Filename))
-		dst, createErr := os.Create(archivePath)
-		if createErr != nil {
-			w.WriteHeader(http.StatusInternalServerError)
-			json.NewEncoder(w).Encode(map[string]string{"error": "Failed to save archive"})
+	files := r.MultipartForm.File["game_files"]
+	if len(files) > 0 {
+		maxMB := 4096
+		if config != nil && config.MaxUploadMB > 0 {
+			maxMB = config.MaxUploadMB
+		}
+		var totalSize int64
+		for _, file := range files {
+			totalSize += file.Size
+		}
+		if totalSize > int64(maxMB)<<20 {
+			w.WriteHeader(http.StatusRequestEntityTooLarge)
+			json.NewEncoder(w).Encode(map[string]string{"error": fmt.Sprintf("Folder exceeds max size of %dMB", maxMB)})
 			return
 		}
-		defer dst.Close()
-		src, _ := fh.Open()
-		defer src.Close()
-		written, _ := io.Copy(dst, src)
+		archivePath, written, archiveErr := saveFolderArchive(game.Name, game.Version, files)
+		if archiveErr != nil {
+			w.WriteHeader(http.StatusBadRequest)
+			json.NewEncoder(w).Encode(map[string]string{"error": archiveErr.Error()})
+			return
+		}
 		game.ArchivePath = archivePath
 		game.FileSize = written
 	}
 	if game.ArchivePath == "" {
-		files := r.MultipartForm.File["game_files"]
-		if len(files) > 0 {
-			archivePath, written, archiveErr := saveFolderArchive(game.Name, game.Version, files)
-			if archiveErr != nil {
-				w.WriteHeader(http.StatusBadRequest)
-				json.NewEncoder(w).Encode(map[string]string{"error": archiveErr.Error()})
-				return
-			}
-			game.ArchivePath = archivePath
-			game.FileSize = written
-		}
-	}
-	if game.ArchivePath == "" {
 		w.WriteHeader(http.StatusBadRequest)
-		json.NewEncoder(w).Encode(map[string]string{"error": "Select an archive or a game folder"})
+		json.NewEncoder(w).Encode(map[string]string{"error": "Select a game folder"})
 		return
 	}
 
@@ -609,14 +604,13 @@ func saveFolderArchive(gameName, version string, files []*multipart.FileHeader) 
 	if err := os.MkdirAll(archiveDir, 0755); err != nil {
 		return "", 0, err
 	}
-	archivePath := filepath.Join(archiveDir, fmt.Sprintf("%s_%s.tar.gz", sanitizeName(gameName), sanitizeName(version)))
+	archivePath := filepath.Join(archiveDir, fmt.Sprintf("%s_%s.zip", sanitizeName(gameName), sanitizeName(version)))
 	dst, err := os.Create(archivePath)
 	if err != nil {
 		return "", 0, err
 	}
 	defer dst.Close()
-	gz := gzip.NewWriter(dst)
-	archive := tar.NewWriter(gz)
+	archive := zip.NewWriter(dst)
 	for _, fh := range files {
 		relativePath := strings.TrimPrefix(filepath.ToSlash(fh.Filename), "/")
 		if relativePath == "" || strings.Contains(relativePath, "../") {
@@ -628,26 +622,23 @@ func saveFolderArchive(gameName, version string, files []*multipart.FileHeader) 
 			gz.Close()
 			return "", 0, openErr
 		}
-		header := &tar.Header{Name: relativePath, Mode: 0755, Size: fh.Size, ModTime: time.Now()}
-		if writeErr := archive.WriteHeader(header); writeErr != nil {
+		entry, writeErr := archive.Create(relativePath)
+		if writeErr != nil {
 			src.Close()
 			archive.Close()
-			gz.Close()
 			return "", 0, writeErr
 		}
-		_, copyErr := io.Copy(archive, src)
+		_, copyErr := io.Copy(entry, src)
 		src.Close()
 		if copyErr != nil {
 			archive.Close()
-			gz.Close()
 			return "", 0, copyErr
 		}
 	}
 	if err := archive.Close(); err != nil {
-		gz.Close()
 		return "", 0, err
 	}
-	if err := gz.Close(); err != nil {
+	if err := dst.Close(); err != nil {
 		return "", 0, err
 	}
 	info, err := os.Stat(archivePath)

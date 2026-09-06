@@ -146,18 +146,12 @@
 
                     <div id="add-form-step-2" class="form-step hidden">
                         <div class="form-group">
-                            <label>UPLOAD ARCHIVE</label>
-                            <div class="upload-zone" id="archive-upload-zone" onclick="document.getElementById('archive-file').click()">
-                                <input type="file" id="archive-file" accept=".zip,.rar,.7z,.tar,.gz,.tar.gz,.tgz" onchange="handleArchiveSelect(this)" style="display:none">
-                                <div class="upload-icon">&#128230;</div>
-                                <p>Click to select archive</p>
-                                <p class="upload-hint">ZIP, RAR, 7Z, TAR.GZ supported</p>
-                            </div>
+                            <label>GAME FOLDER</label>
                             <div class="upload-zone" onclick="document.getElementById('game-folder-files').click()">
                                 <input type="file" id="game-folder-files" webkitdirectory directory multiple onchange="handleFolderSelect(this)" style="display:none">
                                 <div class="upload-icon">&#128193;</div>
-                                <p>Or select a regular game folder</p>
-                                <p class="upload-hint">The server will package it automatically</p>
+                                <p>Select a regular game folder</p>
+                                <p class="upload-hint">The server will package it as a ZIP automatically</p>
                             </div>
                             <div id="archive-info" class="hidden">
                                 <p id="archive-name"></p>
@@ -165,7 +159,7 @@
                             </div>
                         </div>
                         <div class="form-group">
-                            <label>GAME FOLDER</label>
+                            <label>FOLDER INSIDE GAME</label>
                             <div class="input-with-btn">
                                 <input type="text" id="game-folder" placeholder="Folder inside archive or uploaded folder" readonly>
                                 <button class="btn btn-secondary" onclick="browseArchive()">BROWSE</button>

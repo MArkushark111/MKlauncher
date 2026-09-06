@@ -237,15 +237,6 @@ function prevStep(step) {
     currentStep = step;
 }
 
-function handleArchiveSelect(input) {
-    if (input.files.length > 0) {
-        const file = input.files[0];
-        document.getElementById('archive-name').textContent = file.name;
-        document.getElementById('archive-size').textContent = formatSize(file.size);
-        document.getElementById('archive-info').classList.remove('hidden');
-    }
-}
-
 function handleFolderSelect(input) {
     if (input.files.length === 0) return;
     const firstPath = input.files[0].webkitRelativePath || input.files[0].name;
@@ -423,15 +414,13 @@ function buildSummary() {
     const tags = document.getElementById('game-tags').value;
     const folder = document.getElementById('game-folder').value;
     const exe = document.getElementById('game-exe').value;
-    const archive = document.getElementById('archive-file').files[0];
-
     summary.innerHTML = `
         <p><span class="label">Name: </span>${name}</p>
         <p><span class="label">Description: </span>${desc || 'None'}</p>
         <p><span class="label">Version: </span>${ver}</p>
         <p><span class="label">Category: </span>${cat || 'None'}</p>
         <p><span class="label">Tags: </span>${tags || 'None'}</p>
-        <p><span class="label">Archive: </span>${archive ? archive.name : 'None'}</p>
+        <p><span class="label">Folder files: </span>${document.getElementById('game-folder-files').files.length}</p>
         <p><span class="label">Game Folder: </span>${folder || 'Root'}</p>
         <p><span class="label">Executable: </span>${exe || 'None'}</p>`;
 }
@@ -451,10 +440,13 @@ function submitGame() {
     fd.append('game_folder', document.getElementById('game-folder').value);
     fd.append('exe_path', document.getElementById('game-exe').value);
 
-    const archiveFile = document.getElementById('archive-file').files[0];
-    if (archiveFile) fd.append('archive', archiveFile);
-
     const folderFiles = document.getElementById('game-folder-files').files;
+    if (folderFiles.length === 0) {
+        alert('Select a game folder first');
+        btn.disabled = false;
+        progress.classList.add('hidden');
+        return;
+    }
     for (const file of folderFiles) {
         fd.append('game_files', file, file.webkitRelativePath || file.name);
     }
@@ -486,9 +478,15 @@ function submitGame() {
     xhr.onload = function() {
         btn.disabled = false;
         progress.classList.add('hidden');
-        const data = JSON.parse(xhr.responseText);
+        let data;
+        try {
+            data = JSON.parse(xhr.responseText);
+        } catch (error) {
+            alert(`Upload failed (HTTP ${xhr.status})`);
+            return;
+        }
         if (data.error) {
-            alert('Error: ' + data.error);
+            alert(`Upload failed (HTTP ${xhr.status}): ${data.error}`);
             return;
         }
         alert('Game "' + data.name + '" added successfully!');
@@ -499,7 +497,7 @@ function submitGame() {
     xhr.onerror = function() {
         btn.disabled = false;
         progress.classList.add('hidden');
-        alert('Upload failed');
+        alert('Upload failed: network error or the server closed the connection');
     };
 
     xhr.send(fd);
@@ -513,6 +511,7 @@ function resetAddForm() {
     document.getElementById('game-tags').value = '';
     document.getElementById('game-folder').value = '';
     document.getElementById('game-exe').value = '';
+    document.getElementById('game-folder-files').value = '';
     ['cover-preview', 'bg-preview', 'logo-preview', 'wide-preview'].forEach(id => {
         const el = document.getElementById(id);
         el.classList.add('hidden');
