@@ -120,8 +120,11 @@ function loadDashboard() {
 
 function loadGames() {
     api('GET', '/api/games').then(data => {
-        allGames = data || [];
+        allGames = Array.isArray(data) ? data : [];
         renderGames(allGames);
+    }).catch(e => {
+        allGames = [];
+        renderGames([]);
     });
 }
 
@@ -134,6 +137,7 @@ function renderGames(games) {
     }
     games.forEach(g => {
         const coverImg = g.cover_url ? `<img src="${g.cover_url}" style="width:100%;height:160px;object-fit:cover">` : '<div class="game-card-cover">&#127918;</div>';
+        const safeName = g.name.replace(/\\/g, '\\\\').replace(/'/g, "\\'").replace(/"/g, '&quot;');
         grid.innerHTML += `<div class="game-card">
             ${coverImg}
             <div class="game-card-body">
@@ -142,8 +146,9 @@ function renderGames(games) {
                 <p>${g.download_count} downloads</p>
             </div>
             <div class="game-card-actions">
+                <button class="btn btn-primary btn-sm" onclick="updateGameVersion(${g.id})">UPDATE</button>
                 <button class="btn btn-secondary btn-sm" onclick="editGame(${g.id})">EDIT</button>
-                <button class="btn btn-danger btn-sm" onclick="deleteGame(${g.id}, '${g.name.replace(/'/g, "\\'")}')">DELETE</button>
+                <button class="btn btn-danger btn-sm" onclick="deleteGame(${g.id}, '${safeName}')">DELETE</button>
             </div>
         </div>`;
     });
@@ -156,10 +161,13 @@ function filterGames() {
 }
 
 function deleteGame(id, name) {
-    if (!confirm(`Delete "${name}" and all its files?`)) return;
+    if (!confirm('Delete "' + name + '" and all its files?\n\nThis cannot be undone.')) return;
     api('DELETE', '/api/games/' + id).then(data => {
-        if (data.error) { alert(data.error); return; }
+        if (data.error) { alert('Error: ' + data.error); return; }
+        alert('"' + name + '" deleted');
         loadGames();
+    }).catch(e => {
+        alert('Delete failed: ' + e.message);
     });
 }
 
@@ -215,6 +223,24 @@ function saveGameEdit() {
 }
 
 function closeEditModal() { document.getElementById('edit-modal').classList.add('hidden'); }
+
+function updateGameVersion(id) {
+    const game = allGames.find(g => g.id === id);
+    if (!game) return;
+    const modal = document.getElementById('edit-modal');
+    const form = document.getElementById('edit-form');
+    form.innerHTML = `
+        <h3 style="color:var(--accent);margin-bottom:16px">UPDATE VERSION: ${game.name}</h3>
+        <p style="color:var(--text-secondary);margin-bottom:16px">Current version: v${game.version}</p>
+        <div class="form-group"><label>NEW VERSION *</label><input type="text" id="new-version" placeholder="e.g. 1.1.0"></div>
+        <div class="form-group"><label>ARCHIVE FILE *</label><input type="file" id="new-version-archive" accept=".zip,.rar,.7z,.tar,.gz,.tar.gz,.tgz"></div>
+        <div id="version-progress" class="progress-container hidden">
+            <div class="progress-bar"><div class="progress-fill" id="version-progress-fill"></div></div>
+            <p id="version-progress-text">Uploading...</p>
+        </div>
+        <button class="btn btn-primary" id="upload-version-btn" onclick="uploadGameVersion(${game.id})">UPLOAD VERSION</button>`;
+    modal.classList.remove('hidden');
+}
 
 /* Add Game Form */
 let currentStep = 1;
@@ -715,19 +741,51 @@ function uploadGameVersion(id) {
         alert('Version and archive are required');
         return;
     }
+
+    const progress = document.getElementById('version-progress');
+    const btn = document.getElementById('upload-version-btn');
+    if (progress) progress.classList.remove('hidden');
+    if (btn) btn.disabled = true;
+
     const form = new FormData();
     form.append('version', version);
     form.append('archive', archive);
-    fetch(API + '/api/games/' + id + '/versions', {
-        method: 'POST',
-        headers: { 'Authorization': 'Bearer ' + authToken },
-        body: form
-    }).then(r => r.json()).then(data => {
-        if (data.error) { alert(data.error); return; }
-        alert('Version uploaded');
-        closeEditModal();
-        loadGames();
-    }).catch(() => alert('Version upload failed'));
+
+    const xhr = new XMLHttpRequest();
+    xhr.open('POST', API + '/api/games/' + id + '/versions');
+    xhr.setRequestHeader('Authorization', 'Bearer ' + authToken);
+
+    xhr.upload.onprogress = function(e) {
+        if (e.lengthComputable && progress) {
+            const pct = Math.round(e.loaded / e.total * 100);
+            const fill = document.getElementById('version-progress-fill');
+            const text = document.getElementById('version-progress-text');
+            if (fill) fill.style.width = pct + '%';
+            if (text) text.textContent = `Uploading... ${pct}% (${formatSize(e.loaded)} / ${formatSize(e.total)})`;
+        }
+    };
+
+    xhr.onload = function() {
+        if (btn) btn.disabled = false;
+        if (progress) progress.classList.add('hidden');
+        try {
+            const data = JSON.parse(xhr.responseText);
+            if (data.error) { alert(data.error); return; }
+            alert('Version uploaded: ' + version);
+            closeEditModal();
+            loadGames();
+        } catch(e) {
+            alert('Version upload failed');
+        }
+    };
+
+    xhr.onerror = function() {
+        if (btn) btn.disabled = false;
+        if (progress) progress.classList.add('hidden');
+        alert('Version upload failed');
+    };
+
+    xhr.send(form);
 }
 
 /* Notifications */
