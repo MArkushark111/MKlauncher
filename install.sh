@@ -197,7 +197,7 @@ build_server() {
 
     step_info "Downloading Go dependencies..."
     export PATH=$PATH:/usr/local/go/bin
-    go mod download
+    go mod tidy
     step_done "Dependencies downloaded"
 
     step_info "Compiling server binary..."
