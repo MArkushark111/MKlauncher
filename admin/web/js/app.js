@@ -428,21 +428,39 @@ function buildSummary() {
 let currentUploadSession = '';
 
 async function uploadFileWithRetry(session, file, path, index, total) {
+    const chunkSize = 8 * 1024 * 1024;
+    let offset = 0;
     for (let attempt = 1; attempt <= 5; attempt++) {
         try {
+            if (offset >= file.size) {
+                filesUploadedBytes += file.size;
+                return;
+            }
+            const chunk = file.slice(offset, Math.min(offset + chunkSize, file.size));
             const form = new FormData();
             form.append('path', path);
-            form.append('file', file, path);
+            form.append('offset', String(offset));
+            form.append('total_size', String(file.size));
+            form.append('file', chunk, path);
             const response = await fetch(API + '/api/uploads/' + encodeURIComponent(session) + '/file', {
                 method: 'POST',
                 headers: { 'Authorization': 'Bearer ' + authToken },
                 body: form
             });
             const data = await response.json();
-            if (!response.ok || data.error) throw new Error(data.error || `HTTP ${response.status}`);
-            document.getElementById('add-progress-fill').style.width = Math.round((index + 1) / total * 100) + '%';
-            document.getElementById('add-progress-text').textContent = `Uploaded ${index + 1} / ${total}: ${path}`;
-            return;
+            if (!response.ok || data.error) {
+                if (response.status === 409 && Number.isFinite(data.offset)) {
+                    offset = data.offset;
+                    continue;
+                }
+                throw new Error(data.error || `HTTP ${response.status}`);
+            }
+            offset = Number(data.offset);
+            const completed = filesUploadedBytes + offset;
+            document.getElementById('add-progress-fill').style.width = Math.round(completed / filesTotalBytes * 100) + '%';
+            document.getElementById('add-progress-text').textContent = `Uploading ${index + 1} / ${total}: ${path}`;
+            if (offset >= file.size) return;
+            attempt = 0;
         } catch (error) {
             if (attempt === 5) throw error;
             document.getElementById('add-progress-text').textContent = `Connection lost. Retrying ${path} (${attempt}/5)...`;
@@ -450,6 +468,9 @@ async function uploadFileWithRetry(session, file, path, index, total) {
         }
     }
 }
+
+let filesUploadedBytes = 0;
+let filesTotalBytes = 0;
 
 async function submitGame() {
     const btn = document.getElementById('add-game-btn');
@@ -468,6 +489,8 @@ async function submitGame() {
     currentUploadSession = session;
     const files = Array.from(folderFiles);
     const paths = files.map(file => file.webkitRelativePath || file.name);
+    filesUploadedBytes = 0;
+    filesTotalBytes = files.reduce((totalBytes, file) => totalBytes + file.size, 0);
     try {
         for (let index = 0; index < files.length; index++) {
             await uploadFileWithRetry(session, files[index], paths[index], index, files.length);

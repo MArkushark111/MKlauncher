@@ -154,7 +154,7 @@ func main() {
 	server := &http.Server{
 		Addr:         addr,
 		Handler:      corsHandler,
-		ReadTimeout:  30 * time.Second,
+		ReadTimeout:  10 * time.Minute,
 		WriteTimeout: 300 * time.Second,
 		IdleTimeout:  120 * time.Second,
 	}

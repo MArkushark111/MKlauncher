@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 
 	"mkgames-server/db"
@@ -32,23 +33,42 @@ func HandleUploadFile(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Invalid file path", http.StatusBadRequest)
 		return
 	}
+	offset, offsetErr := strconv.ParseInt(r.FormValue("offset"), 10, 64)
+	totalSize, totalErr := strconv.ParseInt(r.FormValue("total_size"), 10, 64)
+	if offsetErr != nil || totalErr != nil || offset < 0 || totalSize < 0 || offset > totalSize {
+		http.Error(w, "Invalid upload offset", http.StatusBadRequest)
+		return
+	}
 	_, file, err := r.FormFile("file")
 	if err != nil {
 		http.Error(w, "File is required", http.StatusBadRequest)
 		return
 	}
 	destination := filepath.Join("storage", "uploads", session, filepath.FromSlash(name))
-	if existing, statErr := os.Stat(destination); statErr == nil && existing.Size() == file.Size {
-		json.NewEncoder(w).Encode(map[string]interface{}{"uploaded": true, "skipped": true, "size": file.Size})
-		return
-	}
 	if err := os.MkdirAll(filepath.Dir(destination), 0755); err != nil {
 		http.Error(w, "Cannot create upload directory", http.StatusInternalServerError)
 		return
 	}
-	dst, err := os.Create(destination)
+	dst, err := os.OpenFile(destination, os.O_CREATE|os.O_WRONLY, 0644)
 	if err != nil {
 		http.Error(w, "Cannot save upload", http.StatusInternalServerError)
+		return
+	}
+	if existing, statErr := dst.Stat(); statErr == nil {
+		if existing.Size() > offset {
+			json.NewEncoder(w).Encode(map[string]interface{}{"uploaded": true, "offset": existing.Size(), "complete": existing.Size() == totalSize})
+			 dst.Close()
+			return
+		}
+		if existing.Size() < offset {
+			dst.Close()
+			http.Error(w, "Upload offset is ahead of server", http.StatusConflict)
+			return
+		}
+	}
+	if _, err := dst.Seek(offset, 0); err != nil {
+		dst.Close()
+		http.Error(w, "Cannot seek upload", http.StatusInternalServerError)
 		return
 	}
 	src, err := file.Open()
@@ -64,7 +84,8 @@ func HandleUploadFile(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Upload interrupted", http.StatusServiceUnavailable)
 		return
 	}
-	json.NewEncoder(w).Encode(map[string]interface{}{"uploaded": true, "size": written})
+	newOffset := offset + written
+	json.NewEncoder(w).Encode(map[string]interface{}{"uploaded": true, "offset": newOffset, "complete": newOffset == totalSize})
 }
 
 func HandleFinalizeUpload(w http.ResponseWriter, r *http.Request) {
