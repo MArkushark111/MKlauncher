@@ -619,7 +619,6 @@ func saveFolderArchive(gameName, version string, files []*multipart.FileHeader) 
 		src, openErr := fh.Open()
 		if openErr != nil {
 			archive.Close()
-			gz.Close()
 			return "", 0, openErr
 		}
 		entry, writeErr := archive.Create(relativePath)
