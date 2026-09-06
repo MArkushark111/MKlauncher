@@ -88,6 +88,7 @@ public:
         QSqlQuery q(m_db);
         q.prepare("SELECT COUNT(*) FROM local_games WHERE server_game_id = ?");
         q.addBindValue(serverGameId);
+        if (!q.exec()) return false;
         if (q.next()) return q.value(0).toInt() > 0;
         return false;
     }

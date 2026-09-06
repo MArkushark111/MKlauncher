@@ -160,7 +160,8 @@ QWidget* GameGrid::createGameCard(const ServerGame &game) {
     if (!game.coverUrl.isEmpty()) {
         QString url = imageUrl(game.coverUrl);
         qDebug() << "[COVER] Loading cover for" << game.name << "URL:" << url;
-        QNetworkRequest req(QUrl(url));
+        QUrl coverUrl(url);
+        QNetworkRequest req(coverUrl);
         req.setTransferTimeout(10000);
         QNetworkReply *reply = m_coverManager->get(req);
         m_coverReplies[reply] = game.id;
