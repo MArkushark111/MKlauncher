@@ -296,6 +296,11 @@ function browsePath(path) {
         const items = document.getElementById('browse-items');
         items.innerHTML = '';
 
+        if (data.error) {
+            items.innerHTML = `<p style="color:var(--danger)">${data.error}</p>`;
+            return;
+        }
+
         if (path !== '/storage/archives') {
             const parent = path.substring(0, path.lastIndexOf('/'));
             items.innerHTML += `<div class="browse-item" onclick="browsePath('${parent}')">
@@ -309,7 +314,8 @@ function browsePath(path) {
             data.entries.forEach(item => {
                 const icon = item.isDir ? '&#128193;' : '&#128196;';
                 const size = item.isDir ? '' : formatSize(item.size);
-                const clickAction = item.isDir
+                const isArchive = /\.(zip|rar|7z|tar|gz|tgz)$/i.test(item.name);
+                const clickAction = item.isDir || isArchive
                     ? `browsePath('${item.path.replace(/\\/g, '\\\\').replace(/'/g, "\\'")}')`
                     : `selectBrowseItem('${item.path.replace(/\\/g, '\\\\').replace(/'/g, "\\'")}')`;
                 items.innerHTML += `<div class="browse-item" onclick="${clickAction}">

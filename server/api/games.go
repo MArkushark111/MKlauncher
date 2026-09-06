@@ -8,7 +8,9 @@ import (
 	"mime/multipart"
 	"net/http"
 	"os"
+	"os/exec"
 	"path/filepath"
+	"strconv"
 	"strconv"
 	"strings"
 	"time"
@@ -349,7 +351,24 @@ func HandleBrowseArchive(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	info, err := os.Stat(req.Path)
+	archivePath, archivePrefix := splitArchivePath(req.Path)
+	if archivePath != "" {
+		entries, err := listArchiveEntries(archivePath, archivePrefix)
+		if err != nil {
+			w.WriteHeader(http.StatusInternalServerError)
+			json.NewEncoder(w).Encode(map[string]string{"error": err.Error()})
+			return
+		}
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"type":    "directory",
+			"path":    req.Path,
+			"entries": entries,
+		})
+		return
+	}
+
+	fsPath := strings.TrimPrefix(filepath.Clean(req.Path), string(filepath.Separator))
+	info, err := os.Stat(fsPath)
 	if err != nil {
 		w.WriteHeader(http.StatusNotFound)
 		json.NewEncoder(w).Encode(map[string]string{"error": "Path not found"})
@@ -366,7 +385,7 @@ func HandleBrowseArchive(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	entries, err := os.ReadDir(req.Path)
+	entries, err := os.ReadDir(fsPath)
 	if err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
 		json.NewEncoder(w).Encode(map[string]string{"error": err.Error()})
@@ -392,6 +411,67 @@ func HandleBrowseArchive(w http.ResponseWriter, r *http.Request) {
 		"path":    req.Path,
 		"entries": items,
 	})
+}
+
+func splitArchivePath(path string) (string, string) {
+	parts := strings.SplitN(path, "::", 2)
+	if len(parts) == 1 {
+		lower := strings.ToLower(parts[0])
+		if !strings.HasSuffix(lower, ".zip") && !strings.HasSuffix(lower, ".rar") &&
+			!strings.HasSuffix(lower, ".7z") && !strings.HasSuffix(lower, ".tar") &&
+			!strings.HasSuffix(lower, ".gz") && !strings.HasSuffix(lower, ".tgz") {
+			return "", ""
+		}
+	}
+	return strings.TrimPrefix(parts[0], "/"), func() string {
+		if len(parts) == 2 {
+			return strings.Trim(parts[1], "/")
+		}
+		return ""
+	}()
+}
+
+func listArchiveEntries(archivePath, prefix string) ([]map[string]interface{}, error) {
+	output, err := exec.Command("7z", "l", "-slt", archivePath).Output()
+	if err != nil {
+		return nil, fmt.Errorf("cannot read archive: %w", err)
+	}
+
+	var entries []map[string]interface{}
+	var name string
+	var size int64
+	for _, line := range strings.Split(string(output)+"\n", "\n") {
+		line = strings.TrimSpace(line)
+		switch {
+		case strings.HasPrefix(line, "Path = "):
+			name = strings.TrimPrefix(line, "Path = ")
+			size = 0
+		case strings.HasPrefix(line, "Size = "):
+			size, _ = strconv.ParseInt(strings.TrimPrefix(line, "Size = "), 10, 64)
+		case line == "" && name != "":
+			if name == filepath.Base(archivePath) || prefix != "" && !strings.HasPrefix(name, prefix+"/") {
+				name = ""
+				continue
+			}
+			relative := strings.TrimPrefix(strings.TrimPrefix(name, prefix), "/")
+			parts := strings.SplitN(relative, "/", 2)
+			entryName := parts[0]
+			entryPath := strings.TrimSuffix(archivePath+"::"+strings.Trim(strings.TrimPrefix(name, prefix), "/"), "/")
+			isDir := len(parts) == 2 || strings.HasSuffix(name, "/")
+			duplicate := false
+			for _, existing := range entries {
+				if existing["path"] == entryPath {
+					duplicate = true
+					break
+				}
+			}
+			if !duplicate {
+				entries = append(entries, map[string]interface{}{"name": entryName, "path": entryPath, "isDir": isDir, "size": size})
+			}
+			name = ""
+		}
+	}
+	return entries, nil
 }
 
 func HandleListArchives(w http.ResponseWriter, r *http.Request) {
