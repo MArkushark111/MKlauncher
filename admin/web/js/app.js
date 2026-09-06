@@ -270,9 +270,15 @@ function previewImage(input, previewId) {
 }
 
 function browseArchive() {
+    const folderFiles = document.getElementById('game-folder-files').files;
     openBrowseModal(path => {
         document.getElementById('game-folder').value = path;
     });
+    if (folderFiles.length > 0) {
+        openLocalBrowse(folderFiles);
+    } else {
+        browsePath('/storage/archives');
+    }
 }
 
 function browseForExe() {
@@ -283,13 +289,74 @@ function browseForExe() {
             alert('Please select a .exe file');
         }
     });
+    const folderFiles = document.getElementById('game-folder-files').files;
+    if (folderFiles.length > 0) {
+        openLocalBrowse(folderFiles);
+    } else {
+        browsePath('/storage/archives');
+    }
 }
 
 function openBrowseModal(callback) {
     browseCallback = callback;
     const modal = document.getElementById('browse-modal');
     modal.classList.remove('hidden');
-    browsePath('/storage/archives');
+}
+
+let localBrowseFiles = [];
+
+function openLocalBrowse(files) {
+    localBrowseFiles = Array.from(files);
+    const root = (localBrowseFiles[0].webkitRelativePath || localBrowseFiles[0].name).split('/')[0];
+    browseLocalPath(root);
+}
+
+function browseLocalPath(path) {
+    currentBrowsePath = path;
+    document.getElementById('browse-path').textContent = path + ' (selected folder)';
+    const items = document.getElementById('browse-items');
+    items.innerHTML = '';
+    const folders = new Map();
+    const visibleFiles = [];
+
+    for (const file of localBrowseFiles) {
+        const relative = file.webkitRelativePath || file.name;
+        if (relative === path || !relative.startsWith(path + '/')) continue;
+        const remainder = relative.substring(path.length + 1);
+        const parts = remainder.split('/');
+        const child = parts[0];
+        if (parts.length > 1) {
+            folders.set(child, path + '/' + child);
+        } else {
+            visibleFiles.push({name: child, path: relative, isDir: false, size: file.size});
+        }
+    }
+
+    const entries = [
+        ...Array.from(folders, ([name, path]) => ({name, path, isDir: true, size: 0})),
+        ...visibleFiles,
+    ];
+    if (entries.length === 0) {
+        items.innerHTML = '<p style="color:var(--text-dim)">No files found</p>';
+        return;
+    }
+    if (path.includes('/')) {
+        const parent = path.substring(0, path.lastIndexOf('/'));
+        items.innerHTML += `<div class="browse-item" onclick="browseLocalPath('${parent.replace(/'/g, "\\'")}')">
+            <span class="icon">&#128194;</span><span class="item-name">..</span>
+        </div>`;
+    }
+    entries.forEach(item => {
+        const escapedPath = item.path.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+        const clickAction = item.isDir
+            ? `browseLocalPath('${escapedPath}')`
+            : `selectBrowseItem('${escapedPath}')`;
+        items.innerHTML += `<div class="browse-item" onclick="${clickAction}">
+            <span class="icon">${item.isDir ? '&#128193;' : '&#128196;'}</span>
+            <span class="item-name">${item.name}</span>
+            <span class="item-size">${item.isDir ? '' : formatSize(item.size)}</span>
+        </div>`;
+    });
 }
 
 let currentBrowsePath = '';
