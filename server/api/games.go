@@ -236,7 +236,7 @@ func HandleAddGameVersion(w http.ResponseWriter, r *http.Request) {
 		json.NewEncoder(w).Encode(map[string]string{"error": "Version is required"})
 		return
 	}
-	fh, err := r.FormFile("archive")
+	_, fh, err := r.FormFile("archive")
 	if err != nil {
 		w.WriteHeader(http.StatusBadRequest)
 		json.NewEncoder(w).Encode(map[string]string{"error": "No archive file provided"})
@@ -397,12 +397,6 @@ func HandleBrowseArchive(w http.ResponseWriter, r *http.Request) {
 func HandleListArchives(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 
-	config, _ := db.DB.GetConfig()
-	maxMB := 4096
-	if config != nil && config.MaxUploadMB > 0 {
-		maxMB = config.MaxUploadMB
-	}
-
 	archivesDir := "storage/archives"
 	os.MkdirAll(archivesDir, 0755)
 
@@ -446,7 +440,7 @@ func HandleUploadArchive(w http.ResponseWriter, r *http.Request) {
 
 	r.ParseMultipartForm(int64(4096 << 20))
 
-	fh, err := r.FormFile("archive")
+	_, fh, err := r.FormFile("archive")
 	if err != nil {
 		w.WriteHeader(http.StatusBadRequest)
 		json.NewEncoder(w).Encode(map[string]string{"error": "No archive file provided"})
