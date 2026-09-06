@@ -23,7 +23,7 @@ import (
 )
 
 const (
-	Version    = "1.0.0"
+	Version    = "1.0.1"
 	ConfigDir  = "/etc/mkgames"
 	DataDir    = "/var/lib/mkgames"
 	LogFile    = "/var/log/mkgames/server.log"
@@ -182,7 +182,7 @@ func loadLocalEnv() {
 	}
 	envPaths := []string{filepath.Join(ConfigDir, "server.env"), filepath.Join(filepath.Dir(execPath), "server.env")}
 	var data []byte
-	var err error
+	err = nil
 	for _, envPath := range envPaths {
 		data, err = os.ReadFile(envPath)
 		if err == nil {
@@ -285,7 +285,6 @@ func startServer() {
 
 	cmd := exec.Command("nohup", execPath, ">"+LogFile, "2>&1", "&")
 	cmd.Dir = dir
-	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
 
 	if err := cmd.Start(); err != nil {
 		fmt.Printf("[!] Failed to start: %v\n", err)

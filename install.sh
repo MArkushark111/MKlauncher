@@ -4,6 +4,7 @@
 # Futuristic installer with progress bar
 
 set -e
+set -o pipefail
 
 RED='\033[0;31m'
 GREEN='\033[0;32m'
@@ -35,7 +36,7 @@ print_banner() {
     echo "║   ██║ ╚═╝ ██║ ██║ ╚═╝ ██║ ██████╔╝              ║"
     echo "║   ╚═╝     ╚═╝ ╚═╝     ╚═╝ ╚═════╝              ║"
     echo "║                                                  ║"
-    echo "║          SERVER INSTALLER v1.0.0                  ║"
+    echo "║          SERVER INSTALLER v1.0.1                  ║"
     echo "║                                                  ║"
     echo "╚══════════════════════════════════════════════════╝"
     echo -e "${NC}"
@@ -200,7 +201,12 @@ build_server() {
     step_done "Dependencies downloaded"
 
     step_info "Compiling server binary..."
-    go build -trimpath -o "$INSTALL_DIR/mkgames-server.new" .
+    BUILD_LOG="/tmp/mkgames-server-build.log"
+    if ! go build -trimpath -o "$INSTALL_DIR/mkgames-server.new" . 2>&1 | tee "$BUILD_LOG"; then
+        echo -e "${RED}Server build failed. Full compiler output:${NC}"
+        cat "$BUILD_LOG"
+        exit 1
+    fi
     chmod 0755 "$INSTALL_DIR/mkgames-server.new"
     mv -f "$INSTALL_DIR/mkgames-server.new" "$INSTALL_DIR/mkgames-server"
     step_done "Server built: $INSTALL_DIR/mkgames-server"

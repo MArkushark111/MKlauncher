@@ -3,7 +3,7 @@
 # MKGames CLI Management Tool
 # Usage: mkgames <command>
 
-VERSION="1.0.0"
+VERSION="1.0.1"
 SERVER_BIN="/opt/mkgames/mkgames-server"
 SERVICE_NAME="mkgames"
 
