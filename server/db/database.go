@@ -12,7 +12,7 @@ import (
 	_ "github.com/mattn/go-sqlite3"
 )
 
-var DB *sql.DB
+var DB *Database
 
 type Database struct {
 	Conn *sql.DB
@@ -36,7 +36,7 @@ func Initialize(dataDir string) (*Database, error) {
 	conn.SetConnMaxLifetime(0)
 
 	db := &Database{Conn: conn}
-	DB = conn
+	DB = db
 
 	if err := db.migrate(); err != nil {
 		return nil, fmt.Errorf("failed to migrate database: %w", err)
