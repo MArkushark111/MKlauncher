@@ -735,7 +735,7 @@ func HandleWipeServer(w http.ResponseWriter, r *http.Request) {
 
 	tables := []string{"games", "game_versions", "downloads", "notifications"}
 	for _, table := range tables {
-		_, err := DB.Conn.Exec("DELETE FROM " + table)
+		_, err := db.DB.Conn.Exec("DELETE FROM " + table)
 		if err != nil {
 			log.Printf("[API] Wipe: failed to clear table %s: %v", table, err)
 		}
