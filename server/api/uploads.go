@@ -147,7 +147,7 @@ func HandleFinalizeUpload(w http.ResponseWriter, r *http.Request) {
 
 func moveUploadedImage(base, uploadPath, newName string) string {
 	src := filepath.Join(base, filepath.FromSlash(uploadPath))
-	info, err := os.Stat(src)
+	_, err := os.Stat(src)
 	if err != nil {
 		return ""
 	}
