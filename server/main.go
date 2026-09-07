@@ -86,6 +86,7 @@ func main() {
 	router.HandleFunc("/api/games", api.HandleListGames).Methods("GET")
 	router.HandleFunc("/api/games/{id:[0-9]+}", api.HandleGetGame).Methods("GET")
 	router.HandleFunc("/api/games", api.RequireAuth(api.HandleAddGame)).Methods("POST")
+	router.HandleFunc("/api/games/dev", api.RequireAuth(api.HandleCreateDeveloperGame)).Methods("POST")
 	router.HandleFunc("/api/uploads/{session}/file", api.RequireAuth(api.HandleUploadFile)).Methods("POST")
 	router.HandleFunc("/api/uploads/{session}/finalize", api.RequireAuth(api.HandleFinalizeUpload)).Methods("POST")
 	router.HandleFunc("/api/games/{id:[0-9]+}", api.RequireAuth(api.HandleUpdateGame)).Methods("PUT")

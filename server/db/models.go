@@ -25,6 +25,9 @@ type Game struct {
 	ExePath       string    `json:"exe_path"`
 	FileSize      int64     `json:"file_size"`
 	DownloadCount int       `json:"download_count"`
+	DeveloperID   int       `json:"developer_id"`
+	IsPublic      bool      `json:"is_public"`
+	Downloads     int       `json:"downloads"`
 	CreatedAt     time.Time `json:"created_at"`
 	UpdatedAt     time.Time `json:"updated_at"`
 }

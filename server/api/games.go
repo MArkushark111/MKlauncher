@@ -174,6 +174,48 @@ func HandleAddGame(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(game)
 }
 
+func HandleCreateDeveloperGame(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	userID, _ := strconv.Atoi(r.Header.Get("X-User-ID"))
+
+	var req struct {
+		Name        string `json:"name"`
+		Version     string `json:"version"`
+		Description string `json:"description"`
+		ExePath     string `json:"exe_path"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(map[string]string{"error": "Invalid JSON"})
+		return
+	}
+	if req.Name == "" {
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(map[string]string{"error": "Game name required"})
+		return
+	}
+	if req.Version == "" { req.Version = "1.0.0" }
+
+	game := &db.Game{
+		Name:        req.Name,
+		Description: req.Description,
+		Version:     req.Version,
+		ExePath:     req.ExePath,
+		DeveloperID: userID,
+		IsPublic:    false,
+	}
+
+	if err := db.DB.AddGame(game); err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		json.NewEncoder(w).Encode(map[string]string{"error": err.Error()})
+		return
+	}
+
+	log.Printf("[API] Developer game created: %s (ID: %d) by user %d", game.Name, game.ID, userID)
+	w.WriteHeader(http.StatusCreated)
+	json.NewEncoder(w).Encode(game)
+}
+
 func HandleUpdateGame(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 

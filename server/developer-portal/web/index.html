@@ -1,0 +1,311 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MKGames Developer Portal</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        :root {
+            --bg: #0a0a0a; --surface: #141414; --card: #1a1a1a;
+            --accent: #00ff88; --danger: #ff4444;
+            --text: #e0e0e0; --text-dim: #888888;
+        }
+        body { background: var(--bg); color: var(--text); font-family: 'Segoe UI', sans-serif; }
+        .container { max-width: 900px; margin: 0 auto; padding: 20px; }
+
+        .header { display: flex; justify-content: space-between; align-items: center; padding: 20px 0; border-bottom: 1px solid #222; margin-bottom: 24px; }
+        .header h1 { font-size: 20px; letter-spacing: 2px; }
+        .header h1 span { color: var(--accent); }
+        .header-right { display: flex; align-items: center; gap: 12px; }
+        .header-right .username { color: var(--text-dim); font-size: 13px; }
+        .btn { padding: 8px 16px; border: none; border-radius: 4px; cursor: pointer; font-size: 13px; font-weight: 600; transition: all 0.2s; }
+        .btn-accent { background: var(--accent); color: #000; }
+        .btn-accent:hover { opacity: 0.85; }
+        .btn-outline { background: transparent; border: 1px solid #333; color: var(--text); }
+        .btn-outline:hover { border-color: var(--accent); color: var(--accent); }
+        .btn-danger { background: var(--danger); color: #fff; }
+        .btn-danger:hover { opacity: 0.85; }
+        .btn-sm { padding: 5px 10px; font-size: 11px; }
+
+        .stat-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; margin-bottom: 24px; }
+        .stat-card { background: var(--card); border-radius: 8px; padding: 20px; text-align: center; }
+        .stat-value { font-size: 32px; font-weight: 700; color: var(--accent); }
+        .stat-label { font-size: 11px; color: var(--text-dim); margin-top: 4px; letter-spacing: 1px; }
+
+        .card { background: var(--card); border-radius: 8px; padding: 20px; margin-bottom: 16px; }
+        .card h3 { font-size: 14px; margin-bottom: 12px; color: var(--text-dim); letter-spacing: 1px; }
+
+        .game-item { display: flex; justify-content: space-between; align-items: center; padding: 12px 0; border-bottom: 1px solid #222; }
+        .game-item:last-child { border: none; }
+        .game-info { flex: 1; }
+        .game-name { font-weight: 600; font-size: 14px; }
+        .game-meta { font-size: 12px; color: var(--text-dim); margin-top: 2px; }
+        .game-actions { display: flex; gap: 8px; }
+
+        .form-group { margin-bottom: 12px; }
+        .form-group label { display: block; font-size: 11px; color: var(--text-dim); margin-bottom: 4px; letter-spacing: 1px; }
+        .form-group input, .form-group textarea, .form-group select { width: 100%; padding: 10px 12px; background: #111; border: 1px solid #333; border-radius: 4px; color: var(--text); font-size: 13px; outline: none; }
+        .form-group input:focus, .form-group textarea:focus { border-color: var(--accent); }
+        .form-group textarea { min-height: 80px; resize: vertical; }
+
+        .login-page { display: flex; justify-content: center; align-items: center; min-height: 100vh; }
+        .login-card { background: var(--card); border-radius: 12px; padding: 40px; width: 380px; }
+        .login-card h1 { text-align: center; margin-bottom: 8px; font-size: 24px; }
+        .login-card h1 span { color: var(--accent); }
+        .login-card .subtitle { text-align: center; color: var(--text-dim); font-size: 12px; margin-bottom: 24px; letter-spacing: 2px; }
+        .login-card .btn { width: 100%; margin-top: 8px; padding: 12px; }
+        .login-card .link { text-align: center; margin-top: 12px; font-size: 12px; color: var(--text-dim); cursor: pointer; }
+        .login-card .link:hover { color: var(--accent); }
+        .error-msg { color: var(--danger); font-size: 12px; text-align: center; margin-top: 8px; min-height: 16px; }
+
+        .hidden { display: none !important; }
+        .badge { display: inline-block; padding: 2px 6px; border-radius: 3px; font-size: 10px; font-weight: 600; letter-spacing: 0.5px; }
+        .badge-green { background: rgba(0,255,136,0.15); color: var(--accent); }
+        .badge-red { background: rgba(255,68,68,0.15); color: var(--danger); }
+        .badge-yellow { background: rgba(255,200,0,0.15); color: #ffc800; }
+    </style>
+</head>
+<body>
+    <div id="loginPage" class="login-page">
+        <div class="login-card">
+            <h1>MK<span>DEV</span></h1>
+            <div class="subtitle">DEVELOPER PORTAL</div>
+            <div class="form-group">
+                <label>SERVER</label>
+                <input type="text" id="serverUrl" placeholder="203.0.113.50:8080">
+            </div>
+            <div class="form-group">
+                <label>USERNAME</label>
+                <input type="text" id="loginUser" placeholder="Username">
+            </div>
+            <div class="form-group">
+                <label>PASSWORD</label>
+                <input type="password" id="loginPass" placeholder="Password">
+            </div>
+            <button class="btn btn-accent" onclick="doLogin()">LOGIN</button>
+            <button class="btn btn-outline" style="margin-top:8px;width:100%" onclick="doRegister()">CREATE ACCOUNT</button>
+            <div id="loginError" class="error-msg"></div>
+        </div>
+    </div>
+
+    <div id="appPage" class="container hidden">
+        <div class="header">
+            <h1>MK<span>DEV</span></h1>
+            <div class="header-right">
+                <span class="username" id="headerUser"></span>
+                <button class="btn btn-outline btn-sm" onclick="logout()">LOGOUT</button>
+            </div>
+        </div>
+
+        <div class="stat-grid">
+            <div class="stat-card">
+                <div class="stat-value" id="statGames">0</div>
+                <div class="stat-label">GAMES</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value" id="statDownloads">0</div>
+                <div class="stat-label">DOWNLOADS</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value" id="statPublic">0</div>
+                <div class="stat-label">PUBLIC</div>
+            </div>
+        </div>
+
+        <div class="card">
+            <h3>YOUR GAMES</h3>
+            <div id="gamesList"></div>
+        </div>
+
+        <div class="card">
+            <h3>CREATE NEW GAME</h3>
+            <div class="form-group">
+                <label>GAME NAME</label>
+                <input type="text" id="newGameName" placeholder="My Game">
+            </div>
+            <div class="form-group">
+                <label>VERSION</label>
+                <input type="text" id="newGameVersion" placeholder="1.0.0">
+            </div>
+            <div class="form-group">
+                <label>DESCRIPTION</label>
+                <textarea id="newGameDesc" placeholder="Game description..."></textarea>
+            </div>
+            <div class="form-group">
+                <label>EXE PATH (inside archive)</label>
+                <input type="text" id="newGameExe" placeholder="Game.exe">
+            </div>
+            <button class="btn btn-accent" onclick="createGame()">CREATE GAME</button>
+        </div>
+
+        <div class="card">
+            <h3>DEVELOPER API KEY</h3>
+            <div id="appsList"></div>
+            <div style="margin-top:12px">
+                <input type="text" id="newAppName" placeholder="App name" style="display:inline;width:200px;padding:8px;background:#111;border:1px solid #333;border-radius:4px;color:var(--text);font-size:13px">
+                <button class="btn btn-accent btn-sm" onclick="createApp()">CREATE KEY</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const API = () => document.getElementById('serverUrl').value.trim().replace(/\/+$/, '');
+        let token = localStorage.getItem('dev_token');
+        let serverUrl = localStorage.getItem('dev_server');
+
+        if (token && serverUrl) {
+            document.getElementById('serverUrl').value = serverUrl;
+            showApp();
+        }
+
+        async function api(method, path, body) {
+            const opts = { method, headers: { 'Content-Type': 'application/json' } };
+            if (token) opts.headers['Authorization'] = 'Bearer ' + token;
+            if (body) opts.body = JSON.stringify(body);
+            const res = await fetch(API() + path, opts);
+            if (!res.ok) {
+                const err = await res.json().catch(() => ({ error: res.statusText }));
+                throw new Error(err.error || 'Request failed');
+            }
+            return res.json();
+        }
+
+        function showApp() {
+            document.getElementById('loginPage').classList.add('hidden');
+            document.getElementById('appPage').classList.remove('hidden');
+            loadProfile();
+            loadStats();
+            loadGames();
+            loadApps();
+        }
+
+        async function loadProfile() {
+            try {
+                const data = await api('GET', '/api/developer/profile');
+                document.getElementById('headerUser').textContent = data.username;
+                if (data.is_banned) {
+                    document.getElementById('loginError').textContent = 'Your account is banned';
+                    document.getElementById('loginPage').classList.remove('hidden');
+                    document.getElementById('appPage').classList.add('hidden');
+                }
+            } catch(e) {}
+        }
+
+        async function loadStats() {
+            try {
+                const data = await api('GET', '/api/developer/stats');
+                document.getElementById('statGames').textContent = data.total_games || 0;
+                document.getElementById('statDownloads').textContent = data.total_downloads || 0;
+                document.getElementById('statPublic').textContent = data.public_games || 0;
+            } catch(e) {}
+        }
+
+        async function loadGames() {
+            try {
+                const games = await api('GET', '/api/developer/games');
+                const list = document.getElementById('gamesList');
+                if (!games || games.length === 0) {
+                    list.innerHTML = '<p style="color:var(--text-dim);font-size:13px">No games yet</p>';
+                    return;
+                }
+                list.innerHTML = games.map(g => `
+                    <div class="game-item">
+                        <div class="game-info">
+                            <div class="game-name">${g.name}</div>
+                            <div class="game-meta">
+                                v${g.version} &middot; ${g.downloads} downloads
+                                ${g.is_public ? '<span class="badge badge-green">PUBLIC</span>' : '<span class="badge badge-yellow">DRAFT</span>'}
+                            </div>
+                        </div>
+                    </div>
+                `).join('');
+            } catch(e) {}
+        }
+
+        async function loadApps() {
+            try {
+                const apps = await api('GET', '/api/developer/apps');
+                const list = document.getElementById('appsList');
+                if (!apps || apps.length === 0) {
+                    list.innerHTML = '<p style="color:var(--text-dim);font-size:13px">No API keys</p>';
+                    return;
+                }
+                list.innerHTML = apps.map(a => `
+                    <div class="game-item">
+                        <div class="game-info">
+                            <div class="game-name">${a.app_name}</div>
+                            <div class="game-meta" style="font-family:monospace;color:var(--accent)">${a.api_key}</div>
+                        </div>
+                    </div>
+                `).join('');
+            } catch(e) {}
+        }
+
+        async function doLogin() {
+            const user = document.getElementById('loginUser').value.trim();
+            const pass = document.getElementById('loginPass').value;
+            const errEl = document.getElementById('loginError');
+            if (!API()) { errEl.textContent = 'Enter server URL'; return; }
+            if (!user || !pass) { errEl.textContent = 'Enter username and password'; return; }
+            try {
+                const data = await api('POST', '/api/auth/login', { username: user, password: pass });
+                token = data.token;
+                serverUrl = API();
+                localStorage.setItem('dev_token', token);
+                localStorage.setItem('dev_server', serverUrl);
+                errEl.textContent = '';
+                showApp();
+            } catch(e) { errEl.textContent = e.message; }
+        }
+
+        async function doRegister() {
+            const user = document.getElementById('loginUser').value.trim();
+            const pass = document.getElementById('loginPass').value;
+            const errEl = document.getElementById('loginError');
+            if (!API()) { errEl.textContent = 'Enter server URL'; return; }
+            if (!user || !pass) { errEl.textContent = 'Enter username and password'; return; }
+            try {
+                const data = await api('POST', '/api/auth/register', { username: user, password: pass, display_name: user });
+                token = data.token;
+                serverUrl = API();
+                localStorage.setItem('dev_token', token);
+                localStorage.setItem('dev_server', serverUrl);
+                errEl.textContent = '';
+                showApp();
+            } catch(e) { errEl.textContent = e.message; }
+        }
+
+        async function createGame() {
+            const name = document.getElementById('newGameName').value.trim();
+            const version = document.getElementById('newGameVersion').value.trim();
+            const desc = document.getElementById('newGameDesc').value.trim();
+            const exe = document.getElementById('newGameExe').value.trim();
+            if (!name) { alert('Enter game name'); return; }
+            try {
+                await api('POST', '/api/games/dev', { name, version: version || '1.0.0', description: desc, exe_path: exe });
+                loadGames();
+                loadStats();
+            } catch(e) { alert(e.message); }
+        }
+
+        async function createApp() {
+            const name = document.getElementById('newAppName').value.trim();
+            if (!name) { alert('Enter app name'); return; }
+            try {
+                await api('POST', '/api/developer/app', { app_name: name });
+                document.getElementById('newAppName').value = '';
+                loadApps();
+            } catch(e) { alert(e.message); }
+        }
+
+        function logout() {
+            token = null;
+            localStorage.removeItem('dev_token');
+            localStorage.removeItem('dev_server');
+            document.getElementById('appPage').classList.add('hidden');
+            document.getElementById('loginPage').classList.remove('hidden');
+        }
+    </script>
+</body>
+</html>

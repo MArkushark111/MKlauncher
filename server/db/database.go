@@ -168,6 +168,10 @@ func (d *Database) migrate() error {
 		d.Conn.Exec("INSERT INTO server_config (id, wan_host, wan_port, server_name) VALUES (1, '', '8080', 'MKGames Server')")
 	}
 
+	d.Conn.Exec("ALTER TABLE games ADD COLUMN developer_id INTEGER DEFAULT 0")
+	d.Conn.Exec("ALTER TABLE games ADD COLUMN is_public INTEGER DEFAULT 1")
+	d.Conn.Exec("ALTER TABLE games ADD COLUMN downloads INTEGER DEFAULT 0")
+
 	return nil
 }
 
@@ -221,11 +225,11 @@ func (d *Database) AddGame(g *Game) error {
 	result, err := d.Conn.Exec(
 		`INSERT INTO games (name, description, version, category, tags, 
 		 cover_url, background_url, logo_url, wide_cover_url,
-		 archive_path, game_folder, exe_path, file_size)
-		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		 archive_path, game_folder, exe_path, file_size, developer_id, is_public)
+		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 		g.Name, g.Description, g.Version, g.Category, g.Tags,
 		g.CoverURL, g.BackgroundURL, g.LogoURL, g.WideCoverURL,
-		g.ArchivePath, g.GameFolder, g.ExePath, g.FileSize,
+		g.ArchivePath, g.GameFolder, g.ExePath, g.FileSize, g.DeveloperID, g.IsPublic,
 	)
 	if err != nil {
 		return err
@@ -608,4 +612,42 @@ func (d *Database) ValidateUserToken(token string) (*User, error) {
 func (d *Database) SetTOTPSecret(userID int, secret string) error {
 	_, err := d.Conn.Exec("UPDATE users SET totp_secret=? WHERE id=?", secret, userID)
 	return err
+}
+
+func (d *Database) CreateDeveloperApp(userID int, appName string) (string, error) {
+	apiKey := fmt.Sprintf("mkdev_%x", sha256.Sum256([]byte(fmt.Sprintf("%d_%d_%s", userID, time.Now().UnixNano(), appName))))
+	_, err := d.Conn.Exec("INSERT INTO developer_apps (user_id, app_name, api_key) VALUES (?, ?, ?)", userID, appName, apiKey)
+	return apiKey, err
+}
+
+func (d *Database) ListDeveloperApps(userID int) ([]map[string]interface{}, error) {
+	rows, err := d.Conn.Query("SELECT id, app_name, api_key, created_at FROM developer_apps WHERE user_id=?", userID)
+	if err != nil { return nil, err }
+	defer rows.Close()
+
+	var apps []map[string]interface{}
+	for rows.Next() {
+		var id int
+		var appName, apiKey, createdAt string
+		if err := rows.Scan(&id, &appName, &apiKey, &createdAt); err != nil { continue }
+		apps = append(apps, map[string]interface{}{
+			"id": id, "app_name": appName, "api_key": apiKey, "created_at": createdAt,
+		})
+	}
+	return apps, nil
+}
+
+func (d *Database) DeleteDeveloperApp(id int, userID int) error {
+	result, err := d.Conn.Exec("DELETE FROM developer_apps WHERE id=? AND user_id=?", id, userID)
+	if err != nil { return err }
+	rows, _ := result.RowsAffected()
+	if rows == 0 { return fmt.Errorf("app not found") }
+	return nil
+}
+
+func (d *Database) GetDeveloperAppByAPIKey(apiKey string) (*User, error) {
+	var userID int
+	err := d.Conn.QueryRow("SELECT user_id FROM developer_apps WHERE api_key=?", apiKey).Scan(&userID)
+	if err != nil { return nil, err }
+	return d.GetUserByID(userID)
 }
