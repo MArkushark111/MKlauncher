@@ -217,6 +217,6 @@ func main() {
 
 	http.Handle("/", http.FileServer(http.Dir("web")))
 
-	log.Println("[DEV-PORTAL] Listening on :7878")
-	log.Fatal(http.ListenAndServe(":7878", nil))
+	log.Println("[DEV-PORTAL] Listening on :8787")
+	log.Fatal(http.ListenAndServe(":8787", nil))
 }

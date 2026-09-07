@@ -220,6 +220,41 @@ build_server() {
     fi
     step_done "Admin assets copied"
 
+    step_info "Building developer portal..."
+    cd "$SCRIPT_DIR/server/developer-portal"
+    BUILD_LOG="/tmp/mkgames-devportal-build.log"
+    if ! go build -trimpath -o "$INSTALL_DIR/dev-portal.new" . 2>&1 | tee "$BUILD_LOG"; then
+        echo -e "${RED}Dev portal build failed. Full compiler output:${NC}"
+        cat "$BUILD_LOG"
+        exit 1
+    fi
+    chmod 0755 "$INSTALL_DIR/dev-portal.new"
+    mv -f "$INSTALL_DIR/dev-portal.new" "$INSTALL_DIR/dev-portal"
+    cp -a "$SCRIPT_DIR/server/developer-portal/web" "$INSTALL_DIR/dev-portal-web"
+    step_done "Developer portal built: $INSTALL_DIR/dev-portal"
+
+    cat > /etc/systemd/system/mkgames-devportal.service << EOF
+[Unit]
+Description=MKGames Developer Portal
+After=network.target
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=$INSTALL_DIR
+ExecStart=$INSTALL_DIR/dev-portal
+Restart=always
+RestartSec=5
+StandardOutput=append:$LOG_DIR/devportal.log
+StandardError=append:$LOG_DIR/devportal.log
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+    systemctl daemon-reload
+    systemctl enable mkgames-devportal.service
+
     cd "$SCRIPT_DIR"
 }
 
