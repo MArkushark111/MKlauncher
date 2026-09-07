@@ -54,7 +54,11 @@ LauncherWindow::LauncherWindow(QWidget *parent) : QMainWindow(parent) {
     m_stack->addWidget(m_chatPage);
 
     if (!m_settings.firstRun() && !m_settings.serverUrl().isEmpty()) {
-        m_urlInput->setText(m_settings.serverUrl());
+        m_serverUrl = m_settings.serverUrl();
+        m_authToken = m_settings.authToken();
+        m_userToken = m_settings.userToken();
+        m_username = m_settings.username();
+        m_urlInput->setText(m_serverUrl);
         m_stack->setCurrentIndex(1);
         refreshGames();
     }
