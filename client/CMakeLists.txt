@@ -30,7 +30,7 @@ set(HEADERS
     src/theme.h
 )
 
-add_executable(${PROJECT_NAME} ${SOURCES} ${HEADERS})
+add_executable(${PROJECT_NAME} WIN32 ${SOURCES} ${HEADERS})
 
 target_include_directories(${PROJECT_NAME} PRIVATE src)
 
