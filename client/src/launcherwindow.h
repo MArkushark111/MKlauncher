@@ -31,7 +31,6 @@ private slots:
     void onAuthResult(QNetworkReply *reply);
     void onLoginClicked();
     void onRegisterClicked();
-    void onLoginResult(QNetworkReply *reply);
     void onGamePlay(int gameId, const QString &name, const QString &exePath, const QString &installPath);
     void onGameDownload(int gameId, const QString &name, const QString &url, qint64 size);
     void onGameUpdate(int gameId, const QString &name, const QString &localVer, const QString &serverVer, const QString &url);

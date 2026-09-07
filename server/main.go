@@ -131,6 +131,28 @@ func main() {
 	router.HandleFunc("/api/friends/{id:[0-9]+}/accept", api.HandleAcceptFriend).Methods("POST")
 	router.HandleFunc("/api/friends/{id:[0-9]+}", api.HandleRemoveFriend).Methods("DELETE")
 
+	router.HandleFunc("/dev/api/auth/login", api.HandleDevLogin).Methods("POST")
+	router.HandleFunc("/dev/api/auth/register", api.HandleDevRegister).Methods("POST")
+	router.HandleFunc("/dev/api/developer/games", api.DevAuth(api.HandleDevGetGames)).Methods("GET")
+	router.HandleFunc("/dev/api/developer/stats", api.DevAuth(api.HandleDevGetStats)).Methods("GET")
+	router.HandleFunc("/dev/api/developer/profile", api.DevAuth(api.HandleDevGetProfile)).Methods("GET")
+	router.HandleFunc("/dev/api/developer/apps", api.DevAuth(api.HandleDevGetApps)).Methods("GET")
+	router.HandleFunc("/dev/api/developer/app", api.DevAuth(api.HandleDevCreateApp)).Methods("POST")
+	router.HandleFunc("/dev/api/developer/app/{id:[0-9]+}", api.DevAuth(api.HandleDevDeleteApp)).Methods("DELETE")
+	router.HandleFunc("/dev/api/developer/game/{id:[0-9]+}/upload", api.DevAuth(api.HandleDevUploadArchive)).Methods("POST")
+
+	router.PathPrefix("/dev/").HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	 filePath := filepath.Join("../server/developer-portal/web", strings.TrimPrefix(r.URL.Path, "/dev/"))
+	 if r.URL.Path == "/dev/" || r.URL.Path == "/dev" {
+		 filePath = filepath.Join("../server/developer-portal/web", "index.html")
+	 }
+	 if info, err := os.Stat(filePath); err == nil && !info.IsDir() {
+		 http.ServeFile(w, r, filePath)
+		 return
+	 }
+	 http.ServeFile(w, r, filepath.Join("../server/developer-portal/web", "index.html"))
+	})
+
 	router.PathPrefix("/covers/").HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		coversDir := filepath.Join(StorageDir, "covers")
 		fileName := strings.TrimPrefix(r.URL.Path, "/covers/")

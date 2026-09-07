@@ -72,10 +72,6 @@
             <h1>MK<span>DEV</span></h1>
             <div class="subtitle">DEVELOPER PORTAL</div>
             <div class="form-group">
-                <label>SERVER</label>
-                <input type="text" id="serverUrl" placeholder="203.0.113.50:8080">
-            </div>
-            <div class="form-group">
                 <label>USERNAME</label>
                 <input type="text" id="loginUser" placeholder="Username">
             </div>
@@ -150,12 +146,10 @@
     </div>
 
     <script>
-        const API = () => document.getElementById('serverUrl').value.trim().replace(/\/+$/, '');
+        const DEV_PREFIX = '/dev';
         let token = localStorage.getItem('dev_token');
-        let serverUrl = localStorage.getItem('dev_server');
 
-        if (token && serverUrl) {
-            document.getElementById('serverUrl').value = serverUrl;
+        if (token) {
             showApp();
         }
 
@@ -163,7 +157,7 @@
             const opts = { method, headers: { 'Content-Type': 'application/json' } };
             if (token) opts.headers['Authorization'] = 'Bearer ' + token;
             if (body) opts.body = JSON.stringify(body);
-            const res = await fetch(API() + path, opts);
+            const res = await fetch(DEV_PREFIX + path, opts);
             if (!res.ok) {
                 const err = await res.json().catch(() => ({ error: res.statusText }));
                 throw new Error(err.error || 'Request failed');
@@ -246,14 +240,11 @@
             const user = document.getElementById('loginUser').value.trim();
             const pass = document.getElementById('loginPass').value;
             const errEl = document.getElementById('loginError');
-            if (!API()) { errEl.textContent = 'Enter server URL'; return; }
             if (!user || !pass) { errEl.textContent = 'Enter username and password'; return; }
             try {
                 const data = await api('POST', '/api/auth/login', { username: user, password: pass });
                 token = data.token;
-                serverUrl = API();
                 localStorage.setItem('dev_token', token);
-                localStorage.setItem('dev_server', serverUrl);
                 errEl.textContent = '';
                 showApp();
             } catch(e) { errEl.textContent = e.message; }
@@ -263,14 +254,11 @@
             const user = document.getElementById('loginUser').value.trim();
             const pass = document.getElementById('loginPass').value;
             const errEl = document.getElementById('loginError');
-            if (!API()) { errEl.textContent = 'Enter server URL'; return; }
             if (!user || !pass) { errEl.textContent = 'Enter username and password'; return; }
             try {
                 const data = await api('POST', '/api/auth/register', { username: user, password: pass, display_name: user });
                 token = data.token;
-                serverUrl = API();
                 localStorage.setItem('dev_token', token);
-                localStorage.setItem('dev_server', serverUrl);
                 errEl.textContent = '';
                 showApp();
             } catch(e) { errEl.textContent = e.message; }
@@ -302,7 +290,6 @@
         function logout() {
             token = null;
             localStorage.removeItem('dev_token');
-            localStorage.removeItem('dev_server');
             document.getElementById('appPage').classList.add('hidden');
             document.getElementById('loginPage').classList.remove('hidden');
         }
