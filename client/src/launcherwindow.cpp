@@ -776,8 +776,8 @@ void LauncherWindow::onAuthResult(QNetworkReply *reply) {
             QJsonObject user = obj["user"].toObject();
             m_userToken = obj["token"].toString();
             m_username = user["username"].toString();
-            m_settings.setValue("user/token", m_userToken);
-            m_settings.setValue("user/username", m_username);
+            m_settings.setUserToken(m_userToken);
+            m_settings.setUsername(m_username);
         }
 
         m_stack->setCurrentIndex(1);

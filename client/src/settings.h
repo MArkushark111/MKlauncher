@@ -62,6 +62,12 @@ public:
         m_settings.clear();
     }
 
+    QString userToken() const { return m_settings.value("user/token", "").toString(); }
+    void setUserToken(const QString &token) { m_settings.setValue("user/token", token); }
+
+    QString username() const { return m_settings.value("user/username", "").toString(); }
+    void setUsername(const QString &name) { m_settings.setValue("user/username", name); }
+
 private:
     QSettings m_settings;
 };
