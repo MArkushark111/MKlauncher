@@ -4,6 +4,8 @@
 #include <QObject>
 #include <QDir>
 #include <QFileInfo>
+#include <QProcess>
+#include <QCoreApplication>
 
 class Uninstaller : public QObject {
     Q_OBJECT
@@ -22,11 +24,25 @@ public:
             return true;
         }
 
+        emit uninstallProgress(0, "Removing files...");
+
+#ifdef Q_OS_WIN
+        QProcess proc;
+        QString systemRoot = qEnvironmentVariable("SystemRoot", "C:/Windows");
+        proc.start(systemRoot + "/System32/cmd.exe", {"/c", "rmdir", "/s", "/q", QDir::toNativeSeparators(installPath)});
+        proc.waitForFinished(30000);
+        if (dir.exists()) {
+            emit uninstallError("Failed to remove: " + installPath + " (" + proc.readAllStandardError().trimmed() + ")");
+            return false;
+        }
+#else
         if (!removeDirectory(dir)) {
             emit uninstallError("Failed to remove: " + installPath);
             return false;
         }
+#endif
 
+        emit uninstallProgress(100, "Done");
         emit uninstallComplete(gameName);
         return true;
     }
