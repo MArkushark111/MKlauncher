@@ -1500,7 +1500,7 @@ void LauncherWindow::showNotification(const QString &title, const QString &msg) 
 
 void LauncherWindow::checkLauncherUpdates() {
     if (m_settings.autoCheckUpdates() && !m_serverUrl.isEmpty()) {
-        m_updater->checkForUpdates("1.0.0");
+        m_updater->checkForUpdates(QApplication::applicationVersion());
     }
 }
 
@@ -2438,18 +2438,20 @@ void LauncherWindow::setupLibraryTab() {
 }
 
 void LauncherWindow::checkForUpdates() {
-    if (m_serverUrl.isEmpty()) return;
+    if (m_serverUrl.isEmpty()) { qDebug() << "[UPDATE] No server URL, skipping"; return; }
     QNetworkRequest request{QUrl(m_serverUrl + "/api/launcher/version")};
     request.setTransferTimeout(10000);
     QNetworkReply *reply = m_authManager->get(request);
     connect(reply, &QNetworkReply::finished, this, [this, reply]() {
         reply->deleteLater();
-        if (reply->error() != QNetworkReply::NoError) return;
+        if (reply->error() != QNetworkReply::NoError) { qDebug() << "[UPDATE] Network error:" << reply->errorString(); return; }
         QJsonDocument doc = QJsonDocument::fromJson(reply->readAll());
         QJsonObject obj = doc.object();
-        if (!obj["has_update"].toBool()) return;
+        qDebug() << "[UPDATE] Server response:" << doc.toJson();
+        if (!obj["has_update"].toBool()) { qDebug() << "[UPDATE] No update available"; return; }
         QString serverVersion = obj["version"].toString();
         QString currentVersion = QApplication::applicationVersion();
+        qDebug() << "[UPDATE] Server:" << serverVersion << "Local:" << currentVersion;
         if (serverVersion.isEmpty()) return;
         if (currentVersion == serverVersion) return;
         QMessageBox msg(this);
