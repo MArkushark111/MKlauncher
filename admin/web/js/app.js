@@ -58,6 +58,11 @@ function showAdminScreen() {
     document.getElementById('admin-screen').classList.remove('hidden');
     document.getElementById('admin-screen').classList.add('active');
     loadDashboard();
+    api('GET', '/api/config').then(cfg => {
+        if (cfg && cfg.wan_host) {
+            document.getElementById('devportal-link').href = 'http://' + cfg.wan_host + ':7878';
+        }
+    });
 }
 
 /* News Admin */

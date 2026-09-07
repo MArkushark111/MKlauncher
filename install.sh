@@ -306,9 +306,9 @@ setup_firewall() {
     ufw allow "$SERVER_PORT/tcp"
     step_done "Port $SERVER_PORT opened"
 
-    step_info "Opening developer portal port 8787..."
-    ufw allow "8787/tcp"
-    step_done "Port 8787 opened"
+    step_info "Opening developer portal port 7878..."
+    ufw allow "7878/tcp"
+    step_done "Port 7878 opened"
 
     step_info "Allowing SSH before enabling firewall..."
     ufw allow OpenSSH || ufw allow 22/tcp
