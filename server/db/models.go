@@ -62,3 +62,13 @@ type Notification struct {
 	Read      bool      `json:"read"`
 	CreatedAt time.Time `json:"created_at"`
 }
+
+type Review struct {
+	ID        int       `json:"id"`
+	GameID    int       `json:"game_id"`
+	Username  string    `json:"username"`
+	Stars     int       `json:"stars"`
+	Title     string    `json:"title"`
+	Text      string    `json:"text"`
+	CreatedAt time.Time `json:"created_at"`
+}

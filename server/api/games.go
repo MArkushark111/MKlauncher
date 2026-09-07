@@ -32,11 +32,23 @@ func HandleListGames(w http.ResponseWriter, r *http.Request) {
 	if games == nil {
 		games = []db.Game{}
 	}
-	log.Printf("[API] Listing %d games", len(games))
-	for _, g := range games {
-		log.Printf("[API] Game %d: %s cover_url=%s archive=%s", g.ID, g.Name, g.CoverURL, g.ArchivePath)
+
+	type GameWithReviews struct {
+		db.Game
+		AvgStars   float64 `json:"avg_stars"`
+		ReviewCount int    `json:"review_count"`
 	}
-	json.NewEncoder(w).Encode(games)
+
+	var result []GameWithReviews
+	for _, g := range games {
+		avgStars, count := db.DB.GetReviewStats(g.ID)
+		result = append(result, GameWithReviews{Game: g, AvgStars: avgStars, ReviewCount: count})
+	}
+	if result == nil {
+		result = []GameWithReviews{}
+	}
+
+	json.NewEncoder(w).Encode(result)
 }
 
 func HandleGetGame(w http.ResponseWriter, r *http.Request) {
@@ -749,4 +761,52 @@ func HandleWipeServer(w http.ResponseWriter, r *http.Request) {
 
 	log.Printf("[API] Server wiped by admin")
 	json.NewEncoder(w).Encode(map[string]string{"message": "Server wiped successfully"})
+}
+
+func HandleGetReviews(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	id, err := strconv.Atoi(mux.Vars(r)["id"])
+	if err != nil {
+		w.WriteHeader(http.StatusBadRequest)
+		return
+	}
+	reviews, err := db.DB.GetReviews(id)
+	if err != nil {
+		reviews = []db.Review{}
+	}
+	avgStars, count := db.DB.GetReviewStats(id)
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"reviews":   reviews,
+		"avg_stars": avgStars,
+		"count":     count,
+	})
+}
+
+func HandleAddReview(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	id, err := strconv.Atoi(mux.Vars(r)["id"])
+	if err != nil {
+		w.WriteHeader(http.StatusBadRequest)
+		return
+	}
+	var req struct {
+		Username string `json:"username"`
+		Stars    int    `json:"stars"`
+		Title    string `json:"title"`
+		Text     string `json:"text"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req.Username == "" {
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(map[string]string{"error": "Username required"})
+		return
+	}
+	if req.Stars < 1 || req.Stars > 5 {
+		req.Stars = 5
+	}
+	if err := db.DB.AddReview(id, req.Username, req.Stars, req.Title, req.Text); err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		json.NewEncoder(w).Encode(map[string]string{"error": err.Error()})
+		return
+	}
+	json.NewEncoder(w).Encode(map[string]string{"message": "Review added"})
 }

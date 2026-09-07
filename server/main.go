@@ -94,6 +94,8 @@ func main() {
 	router.HandleFunc("/api/games/{id:[0-9]+}/download", api.HandleDownloadGame).Methods("GET")
 	router.HandleFunc("/api/games/{id:[0-9]+}/versions", api.HandleGetGameVersions).Methods("GET")
 	router.HandleFunc("/api/games/{id:[0-9]+}/versions", api.RequireAuth(api.HandleAddGameVersion)).Methods("POST")
+	router.HandleFunc("/api/games/{id:[0-9]+}/reviews", api.HandleGetReviews).Methods("GET")
+	router.HandleFunc("/api/games/{id:[0-9]+}/reviews", api.HandleAddReview).Methods("POST")
 
 	router.HandleFunc("/api/archives", api.RequireAuth(api.HandleListArchives)).Methods("GET")
 	router.HandleFunc("/api/archives/upload", api.RequireAuth(api.HandleUploadArchive)).Methods("POST")

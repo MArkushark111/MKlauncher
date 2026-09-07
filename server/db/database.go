@@ -108,6 +108,17 @@ func (d *Database) migrate() error {
 		`CREATE INDEX IF NOT EXISTS idx_games_name ON games(name)`,
 		`CREATE INDEX IF NOT EXISTS idx_downloads_game ON downloads(game_id)`,
 		`CREATE INDEX IF NOT EXISTS idx_downloads_date ON downloads(downloaded_at)`,
+		`CREATE TABLE IF NOT EXISTS reviews (
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			game_id INTEGER NOT NULL,
+			username TEXT NOT NULL,
+			stars INTEGER DEFAULT 5,
+			title TEXT DEFAULT '',
+			text TEXT DEFAULT '',
+			created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+			FOREIGN KEY (game_id) REFERENCES games(id) ON DELETE CASCADE
+		)`,
+		`CREATE INDEX IF NOT EXISTS idx_reviews_game ON reviews(game_id)`,
 	}
 
 	for _, q := range queries {
@@ -399,4 +410,36 @@ func (d *Database) GetGameVersions(gameID int) ([]GameVersion, error) {
 		versions = append(versions, v)
 	}
 	return versions, nil
+}
+
+func (d *Database) AddReview(gameID int, username string, stars int, title, text string) error {
+	_, err := d.Conn.Exec(
+		"INSERT INTO reviews (game_id, username, stars, title, text) VALUES (?, ?, ?, ?, ?)",
+		gameID, username, stars, title, text,
+	)
+	return err
+}
+
+func (d *Database) GetReviews(gameID int) ([]Review, error) {
+	rows, err := d.Conn.Query(
+		"SELECT id, game_id, username, stars, title, text, created_at FROM reviews WHERE game_id = ? ORDER BY created_at DESC",
+		gameID,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var reviews []Review
+	for rows.Next() {
+		var r Review
+		rows.Scan(&r.ID, &r.GameID, &r.Username, &r.Stars, &r.Title, &r.Text, &r.CreatedAt)
+		reviews = append(reviews, r)
+	}
+	return reviews, nil
+}
+
+func (d *Database) GetReviewStats(gameID int) (avgStars float64, count int) {
+	d.Conn.QueryRow("SELECT COALESCE(AVG(stars), 0), COUNT(*) FROM reviews WHERE game_id = ?", gameID).Scan(&avgStars, &count)
+	return
 }
