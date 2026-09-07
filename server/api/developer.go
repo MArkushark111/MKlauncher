@@ -52,7 +52,9 @@ func HandleDevLogin(w http.ResponseWriter, r *http.Request) {
 		json.NewEncoder(w).Encode(map[string]string{"error": "Invalid credentials"})
 		return
 	}
-	if user.PasswordHash != req.Password {
+	var storedPass string
+	db.DB.Conn.QueryRow("SELECT password_hash FROM users WHERE id=?", user.ID).Scan(&storedPass)
+	if storedPass != req.Password {
 		w.WriteHeader(http.StatusUnauthorized)
 		json.NewEncoder(w).Encode(map[string]string{"error": "Invalid credentials"})
 		return
@@ -90,12 +92,13 @@ func HandleDevRegister(w http.ResponseWriter, r *http.Request) {
 	if req.DisplayName == "" {
 		req.DisplayName = req.Username
 	}
-	user, err := db.DB.RegisterUser(req.Username, req.Password, req.DisplayName)
+	err := db.DB.RegisterUser(req.Username, req.Password, req.DisplayName)
 	if err != nil {
 		w.WriteHeader(http.StatusBadRequest)
 		json.NewEncoder(w).Encode(map[string]string{"error": err.Error()})
 		return
 	}
+	user, _ := db.DB.GetUser(req.Username)
 	token, _ := db.DB.GenerateUserToken(user.ID)
 	json.NewEncoder(w).Encode(map[string]interface{}{
 		"success": true,
