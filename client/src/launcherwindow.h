@@ -29,6 +29,9 @@ public:
 private slots:
     void onConnectClicked();
     void onAuthResult(QNetworkReply *reply);
+    void onLoginClicked();
+    void onRegisterClicked();
+    void onLoginResult(QNetworkReply *reply);
     void onGamePlay(int gameId, const QString &name, const QString &exePath, const QString &installPath);
     void onGameDownload(int gameId, const QString &name, const QString &url, qint64 size);
     void onGameUpdate(int gameId, const QString &name, const QString &localVer, const QString &serverVer, const QString &url);
@@ -51,7 +54,11 @@ private:
     QWidget *m_mainPage;
     QWidget *m_settingsPage;
     QLineEdit *m_urlInput;
+    QLineEdit *m_usernameInput;
+    QLineEdit *m_passwordInput;
     QPushButton *m_connectBtn;
+    QPushButton *m_loginBtn;
+    QPushButton *m_registerBtn;
     QLabel *m_statusLabel;
     QLineEdit *m_searchInput;
     QComboBox *m_filterCombo;
@@ -72,6 +79,8 @@ private:
     QNetworkAccessManager *m_reviewManager;
     QString m_serverUrl;
     QString m_authToken;
+    QString m_userToken;
+    QString m_username;
 
     int m_currentDownloadGameId = 0;
     QString m_currentDownloadName;

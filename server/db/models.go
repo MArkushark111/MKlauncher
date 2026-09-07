@@ -72,3 +72,24 @@ type Review struct {
 	Text      string    `json:"text"`
 	CreatedAt time.Time `json:"created_at"`
 }
+
+type User struct {
+	ID           int       `json:"id"`
+	Username     string    `json:"username"`
+	DisplayName  string    `json:"display_name"`
+	AvatarURL    string    `json:"avatar_url"`
+	IsBanned     bool      `json:"is_banned"`
+	TOTPSecret   string    `json:"-"`
+	CreatedAt    time.Time `json:"created_at"`
+}
+
+type Friendship struct {
+	ID        int       `json:"id"`
+	UserID    int       `json:"user_id"`
+	FriendID  int       `json:"friend_id"`
+	Status    string    `json:"status"`
+	CreatedAt time.Time `json:"created_at"`
+	FriendName string   `json:"friend_name,omitempty"`
+	FriendAvatar string `json:"friend_avatar,omitempty"`
+	Online    bool      `json:"online,omitempty"`
+}

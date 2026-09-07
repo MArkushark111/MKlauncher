@@ -119,6 +119,41 @@ func (d *Database) migrate() error {
 			FOREIGN KEY (game_id) REFERENCES games(id) ON DELETE CASCADE
 		)`,
 		`CREATE INDEX IF NOT EXISTS idx_reviews_game ON reviews(game_id)`,
+		`CREATE TABLE IF NOT EXISTS users (
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			username TEXT UNIQUE NOT NULL,
+			password_hash TEXT NOT NULL,
+			display_name TEXT DEFAULT '',
+			avatar_url TEXT DEFAULT '',
+			is_banned INTEGER DEFAULT 0,
+			totp_secret TEXT DEFAULT '',
+			created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+		)`,
+		`CREATE TABLE IF NOT EXISTS friendships (
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			user_id INTEGER NOT NULL,
+			friend_id INTEGER NOT NULL,
+			status TEXT DEFAULT 'pending',
+			created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+			FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+			FOREIGN KEY (friend_id) REFERENCES users(id) ON DELETE CASCADE,
+			UNIQUE(user_id, friend_id)
+		)`,
+		`CREATE TABLE IF NOT EXISTS user_tokens (
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			user_id INTEGER NOT NULL,
+			token TEXT UNIQUE NOT NULL,
+			created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+			FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+		)`,
+		`CREATE TABLE IF NOT EXISTS developer_apps (
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			user_id INTEGER NOT NULL,
+			app_name TEXT NOT NULL,
+			api_key TEXT UNIQUE NOT NULL,
+			created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+			FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+		)`,
 	}
 
 	for _, q := range queries {
@@ -442,4 +477,135 @@ func (d *Database) GetReviews(gameID int) ([]Review, error) {
 func (d *Database) GetReviewStats(gameID int) (avgStars float64, count int) {
 	d.Conn.QueryRow("SELECT COALESCE(AVG(stars), 0), COUNT(*) FROM reviews WHERE game_id = ?", gameID).Scan(&avgStars, &count)
 	return
+}
+
+func (d *Database) RegisterUser(username, passwordHash, displayName string) error {
+	_, err := d.Conn.Exec("INSERT INTO users (username, password_hash, display_name) VALUES (?, ?, ?)", username, passwordHash, displayName)
+	return err
+}
+
+func (d *Database) GetUser(username string) (*User, error) {
+	var u User
+	err := d.Conn.QueryRow("SELECT id, username, display_name, avatar_url, is_banned, totp_secret, created_at FROM users WHERE username = ?", username).
+		Scan(&u.ID, &u.Username, &u.DisplayName, &u.AvatarURL, &u.IsBanned, &u.TOTPSecret, &u.CreatedAt)
+	if err != nil { return nil, err }
+	return &u, nil
+}
+
+func (d *Database) GetUserByID(id int) (*User, error) {
+	var u User
+	err := d.Conn.QueryRow("SELECT id, username, display_name, avatar_url, is_banned, totp_secret, created_at FROM users WHERE id = ?", id).
+		Scan(&u.ID, &u.Username, &u.DisplayName, &u.AvatarURL, &u.IsBanned, &u.TOTPSecret, &u.CreatedAt)
+	if err != nil { return nil, err }
+	return &u, nil
+}
+
+func (d *Database) UpdateUserProfile(userID int, displayName, avatarURL string) error {
+	_, err := d.Conn.Exec("UPDATE users SET display_name=?, avatar_url=? WHERE id=?", displayName, avatarURL, userID)
+	return err
+}
+
+func (d *Database) BanUser(userID int, banned bool) error {
+	val := 0
+	if banned { val = 1 }
+	_, err := d.Conn.Exec("UPDATE users SET is_banned=? WHERE id=?", val, userID)
+	return err
+}
+
+func (d *Database) SearchUsers(query string) ([]User, error) {
+	rows, err := d.Conn.Query("SELECT id, username, display_name, avatar_url, is_banned, created_at FROM users WHERE username LIKE ? OR display_name LIKE ? ORDER BY username LIMIT 20", "%"+query+"%", "%"+query+"%")
+	if err != nil { return nil, err }
+	defer rows.Close()
+	var users []User
+	for rows.Next() {
+		var u User
+		rows.Scan(&u.ID, &u.Username, &u.DisplayName, &u.AvatarURL, &u.IsBanned, &u.CreatedAt)
+		users = append(users, u)
+	}
+	return users, nil
+}
+
+func (d *Database) ListUsers() ([]User, error) {
+	rows, err := d.Conn.Query("SELECT id, username, display_name, avatar_url, is_banned, created_at FROM users ORDER BY username")
+	if err != nil { return nil, err }
+	defer rows.Close()
+	var users []User
+	for rows.Next() {
+		var u User
+		rows.Scan(&u.ID, &u.Username, &u.DisplayName, &u.AvatarURL, &u.IsBanned, &u.CreatedAt)
+		users = append(users, u)
+	}
+	return users, nil
+}
+
+func (d *Database) SendFriendRequest(userID, friendID int) error {
+	_, err := d.Conn.Exec("INSERT OR IGNORE INTO friendships (user_id, friend_id, status) VALUES (?, ?, 'pending')", userID, friendID)
+	return err
+}
+
+func (d *Database) AcceptFriendRequest(userID, friendID int) error {
+	_, err := d.Conn.Exec("UPDATE friendships SET status='accepted' WHERE user_id=? AND friend_id=? AND status='pending'", friendID, userID)
+	if err != nil { return err }
+	_, err = d.Conn.Exec("INSERT OR IGNORE INTO friendships (user_id, friend_id, status) VALUES (?, ?, 'accepted')", userID, friendID)
+	return err
+}
+
+func (d *Database) RemoveFriend(userID, friendID int) error {
+	d.Conn.Exec("DELETE FROM friendships WHERE (user_id=? AND friend_id=?) OR (user_id=? AND friend_id=?)", userID, friendID, friendID, userID)
+	return nil
+}
+
+func (d *Database) GetFriends(userID int) ([]Friendship, error) {
+	rows, err := d.Conn.Query(`
+		SELECT f.id, f.user_id, f.friend_id, f.status, f.created_at,
+			CASE WHEN f.user_id=? THEN u2.username ELSE u1.username END as friend_name,
+			CASE WHEN f.user_id=? THEN u2.avatar_url ELSE u1.avatar_url END as friend_avatar
+		FROM friendships f
+		JOIN users u1 ON f.user_id = u1.id
+		JOIN users u2 ON f.friend_id = u2.id
+		WHERE (f.user_id=? OR f.friend_id=?) AND f.status='accepted'
+		ORDER BY friend_name`, userID, userID, userID, userID)
+	if err != nil { return nil, err }
+	defer rows.Close()
+	var friends []Friendship
+	for rows.Next() {
+		var f Friendship
+		rows.Scan(&f.ID, &f.UserID, &f.FriendID, &f.Status, &f.CreatedAt, &f.FriendName, &f.FriendAvatar)
+		friends = append(friends, f)
+	}
+	return friends, nil
+}
+
+func (d *Database) GetFriendRequests(userID int) ([]Friendship, error) {
+	rows, err := d.Conn.Query(`
+		SELECT f.id, f.user_id, f.friend_id, f.status, f.created_at, u.username as friend_name, u.avatar_url as friend_avatar
+		FROM friendships f JOIN users u ON f.user_id = u.id
+		WHERE f.friend_id=? AND f.status='pending' ORDER BY f.created_at DESC`, userID)
+	if err != nil { return nil, err }
+	defer rows.Close()
+	var reqs []Friendship
+	for rows.Next() {
+		var f Friendship
+		rows.Scan(&f.ID, &f.UserID, &f.FriendID, &f.Status, &f.CreatedAt, &f.FriendName, &f.FriendAvatar)
+		reqs = append(reqs, f)
+	}
+	return reqs, nil
+}
+
+func (d *Database) GenerateUserToken(userID int) (string, error) {
+	token := fmt.Sprintf("%x", sha256.Sum256([]byte(fmt.Sprintf("%d_%d_%s", userID, time.Now().UnixNano(), "mkgames_token"))))
+	_, err := d.Conn.Exec("INSERT INTO user_tokens (user_id, token) VALUES (?, ?)", userID, token)
+	return token, err
+}
+
+func (d *Database) ValidateUserToken(token string) (*User, error) {
+	var userID int
+	err := d.Conn.QueryRow("SELECT user_id FROM user_tokens WHERE token=?", token).Scan(&userID)
+	if err != nil { return nil, err }
+	return d.GetUserByID(userID)
+}
+
+func (d *Database) SetTOTPSecret(userID int, secret string) error {
+	_, err := d.Conn.Exec("UPDATE users SET totp_secret=? WHERE id=?", secret, userID)
+	return err
 }

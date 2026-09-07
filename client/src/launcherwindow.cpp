@@ -75,12 +75,12 @@ void LauncherWindow::setupConnectPage() {
     layout->setAlignment(Qt::AlignCenter);
 
     auto *card = new QWidget();
-    card->setFixedSize(400, 290);
+    card->setFixedSize(400, 520);
     card->setStyleSheet(Theme::cardStyle());
 
     auto *cardLayout = new QVBoxLayout(card);
     cardLayout->setContentsMargins(32, 32, 32, 32);
-    cardLayout->setSpacing(16);
+    cardLayout->setSpacing(12);
 
     auto *logo = new QLabel("MK<span style='color:#00ff88'>LAUNCHER</span>");
     logo->setTextFormat(Qt::RichText);
@@ -88,18 +88,56 @@ void LauncherWindow::setupConnectPage() {
     logo->setStyleSheet("font-size: 28px; font-weight: bold; letter-spacing: 3px; background: transparent;");
     cardLayout->addWidget(logo);
 
-    auto *subtitle = new QLabel("CONNECT TO SERVER");
+    auto *subtitle = new QLabel("CONNECT & LOGIN");
     subtitle->setAlignment(Qt::AlignCenter);
     subtitle->setStyleSheet("color: #888888; font-size: 11px; letter-spacing: 4px; background: transparent;");
     cardLayout->addWidget(subtitle);
 
-    cardLayout->addSpacing(16);
+    cardLayout->addSpacing(8);
+
+    auto *serverLabel = new QLabel("SERVER");
+    serverLabel->setStyleSheet("color: #888888; font-size: 10px; letter-spacing: 2px; background: transparent;");
+    cardLayout->addWidget(serverLabel);
 
     m_urlInput = new QLineEdit();
     m_urlInput->setPlaceholderText("WAN:port (e.g. 203.0.113.50:8080)");
     cardLayout->addWidget(m_urlInput);
 
-    m_connectBtn = new QPushButton("CONNECT");
+    auto *sep = new QFrame();
+    sep->setFrameShape(QFrame::HLine);
+    sep->setStyleSheet("color: #2a2a2a;");
+    cardLayout->addWidget(sep);
+
+    auto *userLabel = new QLabel("ACCOUNT (optional)");
+    userLabel->setStyleSheet("color: #888888; font-size: 10px; letter-spacing: 2px; background: transparent;");
+    cardLayout->addWidget(userLabel);
+
+    m_usernameInput = new QLineEdit();
+    m_usernameInput->setPlaceholderText("Username");
+    cardLayout->addWidget(m_usernameInput);
+
+    m_passwordInput = new QLineEdit();
+    m_passwordInput->setPlaceholderText("Password");
+    m_passwordInput->setEchoMode(QLineEdit::Password);
+    cardLayout->addWidget(m_passwordInput);
+
+    m_loginBtn = new QPushButton("LOGIN");
+    m_loginBtn->setStyleSheet(
+        "background-color: #1a1a1a; color: #e0e0e0; border: 1px solid #00ff88; font-size: 13px; padding: 10px; border-radius: 4px;");
+    m_loginBtn->setCursor(Qt::PointingHandCursor);
+    connect(m_loginBtn, &QPushButton::clicked, this, &LauncherWindow::onLoginClicked);
+    cardLayout->addWidget(m_loginBtn);
+
+    m_registerBtn = new QPushButton("CREATE ACCOUNT");
+    m_registerBtn->setStyleSheet(
+        "background-color: transparent; color: #00ff88; border: 1px solid #2a2a2a; font-size: 11px; padding: 8px; border-radius: 4px;");
+    m_registerBtn->setCursor(Qt::PointingHandCursor);
+    connect(m_registerBtn, &QPushButton::clicked, this, &LauncherWindow::onRegisterClicked);
+    cardLayout->addWidget(m_registerBtn);
+
+    cardLayout->addSpacing(4);
+
+    m_connectBtn = new QPushButton("CONNECT (Guest)");
     m_connectBtn->setStyleSheet(
         "background-color: #00ff88; color: #000000; font-size: 14px; padding: 12px; border: none;");
     m_connectBtn->setCursor(Qt::PointingHandCursor);
@@ -627,6 +665,57 @@ void LauncherWindow::onConnectClicked() {
     connectToServer(url, "");
 }
 
+void LauncherWindow::onLoginClicked() {
+    QString url = m_urlInput->text().trimmed();
+    QString user = m_usernameInput->text().trimmed();
+    QString pass = m_passwordInput->text();
+
+    if (url.isEmpty() || user.isEmpty() || pass.isEmpty()) {
+        m_statusLabel->setText("Enter server, username, and password");
+        return;
+    }
+    if (!url.startsWith("http://") && !url.startsWith("https://")) {
+        url = "http://" + url;
+    }
+    m_serverUrl = url;
+    m_statusLabel->setText("Logging in...");
+    m_loginBtn->setEnabled(false);
+
+    QJsonObject obj;
+    obj["username"] = user;
+    obj["password"] = pass;
+    QNetworkRequest request(QUrl(url + "/api/auth/login"));
+    request.setHeader(QNetworkRequest::ContentTypeHeader, "application/json");
+    request.setTransferTimeout(10000);
+    m_authManager->post(request, QJsonDocument(obj).toJson());
+}
+
+void LauncherWindow::onRegisterClicked() {
+    QString url = m_urlInput->text().trimmed();
+    QString user = m_usernameInput->text().trimmed();
+    QString pass = m_passwordInput->text();
+
+    if (url.isEmpty() || user.isEmpty() || pass.isEmpty()) {
+        m_statusLabel->setText("Enter server, username, and password");
+        return;
+    }
+    if (!url.startsWith("http://") && !url.startsWith("https://")) {
+        url = "http://" + url;
+    }
+    m_serverUrl = url;
+    m_statusLabel->setText("Creating account...");
+    m_registerBtn->setEnabled(false);
+
+    QJsonObject obj;
+    obj["username"] = user;
+    obj["password"] = pass;
+    obj["display_name"] = user;
+    QNetworkRequest request(QUrl(url + "/api/auth/register"));
+    request.setHeader(QNetworkRequest::ContentTypeHeader, "application/json");
+    request.setTransferTimeout(10000);
+    m_authManager->post(request, QJsonDocument(obj).toJson());
+}
+
 void LauncherWindow::connectToServer(const QString &url, const QString &passcode) {
     m_serverUrl = url;
     m_statusLabel->setText("Connecting...");
@@ -663,17 +752,18 @@ void LauncherWindow::onGameDetails(const ServerGame &game) {
 
 void LauncherWindow::onAuthResult(QNetworkReply *reply) {
     m_connectBtn->setEnabled(true);
-
-    if (reply->error() != QNetworkReply::NoError) {
-        m_statusLabel->setText("Connection failed: " + reply->errorString());
-        reply->deleteLater();
-        return;
-    }
+    m_loginBtn->setEnabled(true);
+    m_registerBtn->setEnabled(true);
 
     QByteArray data = reply->readAll();
     QJsonDocument doc = QJsonDocument::fromJson(data);
     QJsonObject obj = doc.object();
     reply->deleteLater();
+
+    if (reply->error() != QNetworkReply::NoError) {
+        m_statusLabel->setText(obj["error"].toString().isEmpty() ? reply->errorString() : obj["error"].toString());
+        return;
+    }
 
     if (obj["success"].toBool()) {
         m_authToken = obj["token"].toString();
@@ -681,6 +771,14 @@ void LauncherWindow::onAuthResult(QNetworkReply *reply) {
         m_settings.setServerUrl(m_serverUrl);
         m_settings.setConnected(true);
         m_settings.setFirstRun(false);
+
+        if (obj.contains("user")) {
+            QJsonObject user = obj["user"].toObject();
+            m_userToken = obj["token"].toString();
+            m_username = user["username"].toString();
+            m_settings.setValue("user/token", m_userToken);
+            m_settings.setValue("user/username", m_username);
+        }
 
         m_stack->setCurrentIndex(1);
         refreshGames();
@@ -1016,7 +1114,7 @@ void LauncherWindow::showGameDetail(const ServerGame &game) {
         infoLayout->addWidget(starLabel);
     }
 
-    auto *dlLabel = new QLabel(QString("%1 downloads | %2").arg(game.downloadCount).arg(formatSize(game.fileSize)));
+    auto *dlLabel = new QLabel(QString("%1 downloads | %2").arg(game.downloadCount).arg(m_gameGrid->formatSize(game.fileSize)));
     dlLabel->setStyleSheet("color: #888888; font-size: 12px; background: transparent;");
     infoLayout->addWidget(dlLabel);
 
@@ -1086,7 +1184,7 @@ void LauncherWindow::showGameDetail(const ServerGame &game) {
         });
         btnLayout->addWidget(uninstallBtn);
     } else {
-        auto *installBtn = new QPushButton(QString("INSTALL - %1").arg(formatSize(game.fileSize)));
+        auto *installBtn = new QPushButton(QString("INSTALL - %1").arg(m_gameGrid->formatSize(game.fileSize)));
         installBtn->setObjectName("installBtn");
         installBtn->setCursor(Qt::PointingHandCursor);
         installBtn->setStyleSheet(
@@ -1373,4 +1471,5 @@ void LauncherWindow::setupLibraryTab() {
     outerLayout->addWidget(scroll);
 
     m_stack->addWidget(m_libraryPage);
+    m_stack->setCurrentWidget(m_libraryPage);
 }

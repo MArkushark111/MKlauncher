@@ -114,6 +114,22 @@ func main() {
 	router.HandleFunc("/api/server/wipe", api.RequireAuth(api.HandleWipeServer)).Methods("POST")
 	router.HandleFunc("/api/notifications", api.RequireAuth(api.HandleGetNotifications)).Methods("GET")
 
+	router.HandleFunc("/api/auth/register", api.HandleRegister).Methods("POST")
+	router.HandleFunc("/api/auth/login", api.HandleLogin).Methods("POST")
+	router.HandleFunc("/api/users/me", api.HandleGetProfile).Methods("GET")
+	router.HandleFunc("/api/users/me", api.HandleUpdateProfile).Methods("PUT")
+	router.HandleFunc("/api/users/me/avatar", api.HandleUploadAvatar).Methods("POST")
+	router.HandleFunc("/api/users/me/totp", api.HandleGenerateTOTP).Methods("POST")
+	router.HandleFunc("/api/users/me/totp/verify", api.HandleVerifyTOTP).Methods("POST")
+	router.HandleFunc("/api/users/{id:[0-9]+}", api.HandleGetUserPublic).Methods("GET")
+	router.HandleFunc("/api/users/search", api.HandleSearchUsers).Methods("GET")
+	router.HandleFunc("/api/admin/users", api.RequireAuth(api.HandleListUsers)).Methods("GET")
+	router.HandleFunc("/api/admin/users/{id:[0-9]+}/ban", api.RequireAuth(api.HandleBanUser)).Methods("POST")
+	router.HandleFunc("/api/friends", api.HandleGetFriends).Methods("GET")
+	router.HandleFunc("/api/friends/request", api.HandleSendFriendRequest).Methods("POST")
+	router.HandleFunc("/api/friends/{id:[0-9]+}/accept", api.HandleAcceptFriend).Methods("POST")
+	router.HandleFunc("/api/friends/{id:[0-9]+}", api.HandleRemoveFriend).Methods("DELETE")
+
 	router.PathPrefix("/covers/").HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		coversDir := filepath.Join(StorageDir, "covers")
 		fileName := strings.TrimPrefix(r.URL.Path, "/covers/")
@@ -137,6 +153,18 @@ func main() {
 			}
 		}
 		log.Printf("[COVERS] NOT FOUND: %s", fileName)
+		http.NotFound(w, r)
+	})
+
+	router.PathPrefix("/avatars/").HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		avatarsDir := filepath.Join(StorageDir, "avatars")
+		fileName := strings.TrimPrefix(r.URL.Path, "/avatars/")
+		fileName = strings.TrimPrefix(fileName, "/")
+		directPath := filepath.Join(avatarsDir, fileName)
+		if info, err := os.Stat(directPath); err == nil && !info.IsDir() {
+			http.ServeFile(w, r, directPath)
+			return
+		}
 		http.NotFound(w, r)
 	})
 

@@ -80,6 +80,8 @@ private:
 
     void buildGrid();
     QWidget* createGameCard(const ServerGame &game);
+
+public:
     QString formatSize(qint64 bytes) const;
     QString imageUrl(const QString &url) const;
 };
