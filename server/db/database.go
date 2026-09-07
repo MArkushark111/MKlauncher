@@ -154,6 +154,138 @@ func (d *Database) migrate() error {
 			created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
 			FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
 		)`,
+		`CREATE TABLE IF NOT EXISTS categories (
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			name TEXT UNIQUE NOT NULL,
+			icon TEXT DEFAULT '',
+			sort_order INTEGER DEFAULT 0
+		)`,
+		`CREATE TABLE IF NOT EXISTS game_categories (
+			game_id INTEGER NOT NULL,
+			category_id INTEGER NOT NULL,
+			PRIMARY KEY (game_id, category_id),
+			FOREIGN KEY (game_id) REFERENCES games(id) ON DELETE CASCADE,
+			FOREIGN KEY (category_id) REFERENCES categories(id) ON DELETE CASCADE
+		)`,
+		`CREATE TABLE IF NOT EXISTS screenshots (
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			game_id INTEGER NOT NULL,
+			url TEXT NOT NULL,
+			sort_order INTEGER DEFAULT 0,
+			created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+			FOREIGN KEY (game_id) REFERENCES games(id) ON DELETE CASCADE
+		)`,
+		`CREATE TABLE IF NOT EXISTS news (
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			title TEXT NOT NULL,
+			content TEXT NOT NULL,
+			image_url TEXT DEFAULT '',
+			game_id INTEGER DEFAULT 0,
+			is_pinned INTEGER DEFAULT 0,
+			created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+		)`,
+		`CREATE TABLE IF NOT EXISTS playtime (
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			user_id INTEGER NOT NULL,
+			game_id INTEGER NOT NULL,
+			seconds INTEGER DEFAULT 0,
+			last_played DATETIME DEFAULT CURRENT_TIMESTAMP,
+			UNIQUE(user_id, game_id),
+			FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+			FOREIGN KEY (game_id) REFERENCES games(id) ON DELETE CASCADE
+		)`,
+		`CREATE TABLE IF NOT EXISTS recently_played (
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			user_id INTEGER NOT NULL,
+			game_id INTEGER NOT NULL,
+			played_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+			UNIQUE(user_id, game_id),
+			FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+			FOREIGN KEY (game_id) REFERENCES games(id) ON DELETE CASCADE
+		)`,
+		`CREATE TABLE IF NOT EXISTS wishlist (
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			user_id INTEGER NOT NULL,
+			game_id INTEGER NOT NULL,
+			created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+			UNIQUE(user_id, game_id),
+			FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+			FOREIGN KEY (game_id) REFERENCES games(id) ON DELETE CASCADE
+		)`,
+		`CREATE TABLE IF NOT EXISTS achievements (
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			game_id INTEGER NOT NULL,
+			name TEXT NOT NULL,
+			description TEXT DEFAULT '',
+			icon_url TEXT DEFAULT '',
+			secret INTEGER DEFAULT 0,
+			created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+			FOREIGN KEY (game_id) REFERENCES games(id) ON DELETE CASCADE
+		)`,
+		`CREATE TABLE IF NOT EXISTS user_achievements (
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			user_id INTEGER NOT NULL,
+			achievement_id INTEGER NOT NULL,
+			game_id INTEGER NOT NULL,
+			unlocked_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+			UNIQUE(user_id, achievement_id),
+			FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+			FOREIGN KEY (achievement_id) REFERENCES achievements(id) ON DELETE CASCADE,
+			FOREIGN KEY (game_id) REFERENCES games(id) ON DELETE CASCADE
+		)`,
+		`CREATE TABLE IF NOT EXISTS leaderboard (
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			user_id INTEGER NOT NULL,
+			game_id INTEGER NOT NULL,
+			score INTEGER DEFAULT 0,
+			updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+			UNIQUE(user_id, game_id),
+			FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+			FOREIGN KEY (game_id) REFERENCES games(id) ON DELETE CASCADE
+		)`,
+		`CREATE TABLE IF NOT EXISTS chat_messages (
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			sender_id INTEGER NOT NULL,
+			receiver_id INTEGER DEFAULT 0,
+			channel TEXT DEFAULT 'global',
+			message TEXT NOT NULL,
+			created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+			FOREIGN KEY (sender_id) REFERENCES users(id) ON DELETE CASCADE
+		)`,
+		`CREATE TABLE IF NOT EXISTS mods (
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			game_id INTEGER NOT NULL,
+			user_id INTEGER NOT NULL,
+			name TEXT NOT NULL,
+			description TEXT DEFAULT '',
+			version TEXT DEFAULT '1.0.0',
+			file_path TEXT DEFAULT '',
+			file_size INTEGER DEFAULT 0,
+			downloads INTEGER DEFAULT 0,
+			created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+			FOREIGN KEY (game_id) REFERENCES games(id) ON DELETE CASCADE,
+			FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+		)`,
+		`CREATE TABLE IF NOT EXISTS multiplayer_servers (
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			game_id INTEGER NOT NULL,
+			name TEXT NOT NULL,
+			ip TEXT NOT NULL,
+			port INTEGER NOT NULL,
+			max_players INTEGER DEFAULT 32,
+			current_players INTEGER DEFAULT 0,
+			map_name TEXT DEFAULT '',
+			is_official INTEGER DEFAULT 0,
+			created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+			FOREIGN KEY (game_id) REFERENCES games(id) ON DELETE CASCADE
+		)`,
+		`CREATE TABLE IF NOT EXISTS featured_games (
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			game_id INTEGER UNIQUE NOT NULL,
+			sort_order INTEGER DEFAULT 0,
+			created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+			FOREIGN KEY (game_id) REFERENCES games(id) ON DELETE CASCADE
+		)`,
 	}
 
 	for _, q := range queries {
@@ -171,6 +303,19 @@ func (d *Database) migrate() error {
 	d.Conn.Exec("ALTER TABLE games ADD COLUMN developer_id INTEGER DEFAULT 0")
 	d.Conn.Exec("ALTER TABLE games ADD COLUMN is_public INTEGER DEFAULT 1")
 	d.Conn.Exec("ALTER TABLE games ADD COLUMN downloads INTEGER DEFAULT 0")
+
+	var catCount int
+	d.Conn.QueryRow("SELECT COUNT(*) FROM categories").Scan(&catCount)
+	if catCount == 0 {
+		cats := []struct{ name, icon string }{
+			{"Action", "⚔️"}, {"RPG", "🗡️"}, {"Strategy", "♟️"}, {"Puzzle", "🧩"},
+			{"Racing", "🏎️"}, {"Sports", "⚽"}, {"Horror", "👻"}, {"Adventure", "🗺️"},
+			{"Simulation", "🎮"}, {"Sandbox", "🏗️"}, {"Multiplayer", "🌐"}, {"Indie", "💎"},
+		}
+		for i, c := range cats {
+			d.Conn.Exec("INSERT INTO categories (name, icon, sort_order) VALUES (?, ?, ?)", c.name, c.icon, i)
+		}
+	}
 
 	return nil
 }
