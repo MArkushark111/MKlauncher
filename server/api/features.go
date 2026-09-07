@@ -2,7 +2,12 @@ package api
 
 import (
 	"encoding/json"
+	"fmt"
+	"io"
+	"log"
 	"net/http"
+	"os"
+	"path/filepath"
 	"strconv"
 
 	"mkgames-server/db"
@@ -1382,7 +1387,7 @@ func HandleUploadLauncherUpdate(w http.ResponseWriter, r *http.Request) {
 		json.NewEncoder(w).Encode(map[string]string{"error": "Version required"})
 		return
 	}
-	fh, err := r.FormFile("file")
+	fh, _, err := r.FormFile("file")
 	if err != nil {
 		w.WriteHeader(http.StatusBadRequest)
 		json.NewEncoder(w).Encode(map[string]string{"error": "No file uploaded"})
