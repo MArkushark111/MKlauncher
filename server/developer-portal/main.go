@@ -13,7 +13,7 @@ import (
 	_ "github.com/mattn/go-sqlite3"
 )
 
-var db *sql.Database
+var sqlDB *sql.Database
 
 func cors(next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
@@ -30,7 +30,7 @@ func auth(next http.HandlerFunc) http.HandlerFunc {
 		token := r.Header.Get("Authorization")
 		if len(token) > 7 && token[:7] == "Bearer " { token = token[7:] }
 		var userID int
-		err := db.QueryRow("SELECT user_id FROM user_tokens WHERE token=?", token).Scan(&userID)
+		err := sqlDB.QueryRow("SELECT user_id FROM user_tokens WHERE token=?", token).Scan(&userID)
 		if err != nil {
 			http.Error(w, `{"error":"Unauthorized"}`, 401)
 			return
@@ -54,7 +54,7 @@ func handleLogin(w http.ResponseWriter, r *http.Request) {
 	}
 	var id int
 	var passHash, displayName string
-	err := db.QueryRow("SELECT id, password_hash, display_name FROM users WHERE username=?", req.Username).Scan(&id, &passHash, &displayName)
+	err := sqlDB.QueryRow("SELECT id, password_hash, display_name FROM users WHERE username=?", req.Username).Scan(&id, &passHash, &displayName)
 	if err != nil {
 		http.Error(w, `{"error":"Invalid credentials"}`, 401)
 		return
@@ -64,10 +64,10 @@ func handleLogin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var token string
-	err = db.QueryRow("SELECT token FROM user_tokens WHERE user_id=? ORDER BY id DESC LIMIT 1", id).Scan(&token)
+	err = sqlDB.QueryRow("SELECT token FROM user_tokens WHERE user_id=? ORDER BY id DESC LIMIT 1", id).Scan(&token)
 	if err != nil {
 		t := fmt.Sprintf("%x", id*1000000)
-		db.Exec("INSERT INTO user_tokens (user_id, token) VALUES (?, ?)", id, t)
+		sqlDB.Exec("INSERT INTO user_tokens (user_id, token) VALUES (?, ?)", id, t)
 		token = t
 	}
 	jsonResp(w, map[string]interface{}{
@@ -84,16 +84,16 @@ func handleRegister(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if req.DisplayName == "" { req.DisplayName = req.Username }
-	_, err := db.Exec("INSERT INTO users (username, password_hash, display_name) VALUES (?, ?, ?)",
+	_, err := sqlDB.Exec("INSERT INTO users (username, password_hash, display_name) VALUES (?, ?, ?)",
 		req.Username, req.Password, req.DisplayName)
 	if err != nil {
 		http.Error(w, `{"error":"Username already taken"}`, 400)
 		return
 	}
 	var id int
-	db.QueryRow("SELECT id FROM users WHERE username=?", req.Username).Scan(&id)
+	sqlDB.QueryRow("SELECT id FROM users WHERE username=?", req.Username).Scan(&id)
 	token := fmt.Sprintf("%x", id*1000000+1)
-	db.Exec("INSERT INTO user_tokens (user_id, token) VALUES (?, ?)", id, token)
+	sqlDB.Exec("INSERT INTO user_tokens (user_id, token) VALUES (?, ?)", id, token)
 	jsonResp(w, map[string]interface{}{
 		"success": true, "token": token,
 		"user": map[string]interface{}{"id": id, "username": req.Username, "display_name": req.DisplayName},
@@ -102,7 +102,7 @@ func handleRegister(w http.ResponseWriter, r *http.Request) {
 
 func handleGetGames(w http.ResponseWriter, r *http.Request) {
 	userID, _ := strconv.Atoi(r.Header.Get("X-User-ID"))
-	rows, err := db.Query(`SELECT g.id, g.name, g.version, g.exe_path, g.description, g.is_public, g.downloads, g.created_at
+	rows, err := sqlDB.Query(`SELECT g.id, g.name, g.version, g.exe_path, g.description, g.is_public, g.downloads, g.created_at
 		FROM games g WHERE g.developer_id=? ORDER BY g.created_at DESC`, userID)
 	if err != nil {
 		jsonResp(w, []interface{}{})
@@ -125,7 +125,7 @@ func handleGetGames(w http.ResponseWriter, r *http.Request) {
 
 func handleGetDevApps(w http.ResponseWriter, r *http.Request) {
 	userID, _ := strconv.Atoi(r.Header.Get("X-User-ID"))
-	rows, err := db.Query("SELECT id, app_name, api_key, created_at FROM developer_apps WHERE user_id=?", userID)
+	rows, err := sqlDB.Query("SELECT id, app_name, api_key, created_at FROM developer_apps WHERE user_id=?", userID)
 	if err != nil {
 		jsonResp(w, []interface{}{})
 		return
@@ -146,7 +146,7 @@ func handleGetDevApps(w http.ResponseWriter, r *http.Request) {
 func handleGetStats(w http.ResponseWriter, r *http.Request) {
 	userID, _ := strconv.Atoi(r.Header.Get("X-User-ID"))
 	var totalGames, totalDownloads, publicGames int
-	db.QueryRow("SELECT COUNT(*), COALESCE(SUM(downloads),0), SUM(CASE WHEN is_public THEN 1 ELSE 0 END) FROM games WHERE developer_id=?", userID).Scan(&totalGames, &totalDownloads, &publicGames)
+	sqlDB.QueryRow("SELECT COUNT(*), COALESCE(SUM(downloads),0), SUM(CASE WHEN is_public THEN 1 ELSE 0 END) FROM games WHERE developer_id=?", userID).Scan(&totalGames, &totalDownloads, &publicGames)
 	jsonResp(w, map[string]interface{}{
 		"total_games": totalGames, "total_downloads": totalDownloads, "public_games": publicGames,
 	})
@@ -160,7 +160,7 @@ func handleCreateApp(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, `{"error":"App name required"}`, 400)
 		return
 	}
-	apiKey, err := db.Exec("INSERT INTO developer_apps (user_id, app_name, api_key) VALUES (?, ?, ?)",
+	apiKey, err := sqlDB.Exec("INSERT INTO developer_apps (user_id, app_name, api_key) VALUES (?, ?, ?)",
 		userID, req.AppName, "")
 	if err != nil {
 		http.Error(w, `{"error":"Failed to create app"}`, 500)
@@ -174,7 +174,7 @@ func handleDeleteApp(w http.ResponseWriter, r *http.Request) {
 	userID, _ := strconv.Atoi(r.Header.Get("X-User-ID"))
 	parts := strings.Split(r.URL.Path, "/")
 	id, _ := strconv.Atoi(parts[len(parts)-1])
-	_, err := db.Exec("DELETE FROM developer_apps WHERE id=? AND user_id=?", id, userID)
+	_, err := sqlDB.Exec("DELETE FROM developer_apps WHERE id=? AND user_id=?", id, userID)
 	if err != nil {
 		http.Error(w, `{"error":"Not found"}`, 404)
 		return
@@ -186,7 +186,7 @@ func handleGetProfile(w http.ResponseWriter, r *http.Request) {
 	userID, _ := strconv.Atoi(r.Header.Get("X-User-ID"))
 	var username, displayName, avatarURL string
 	var isBanned bool
-	err := db.QueryRow("SELECT username, display_name, COALESCE(avatar_url,''), is_banned FROM users WHERE id=?", userID).Scan(&username, &displayName, &avatarURL, &isBanned)
+	err := sqlDB.QueryRow("SELECT username, display_name, COALESCE(avatar_url,''), is_banned FROM users WHERE id=?", userID).Scan(&username, &displayName, &avatarURL, &isBanned)
 	if err != nil {
 		http.Error(w, `{"error":"Not found"}`, 404)
 		return
@@ -202,9 +202,9 @@ func main() {
 		log.Fatal("Database not found. Run main server first.")
 	}
 	var err error
-	db, err = sql.Open("sqlite3", dbPath+"?_journal_mode=WAL")
+	sqlDB, err = sql.Open("sqlite3", dbPath+"?_journal_mode=WAL")
 	if err != nil { log.Fatal(err) }
-	defer db.Close()
+	defer sqlDB.Close()
 
 	http.HandleFunc("/api/auth/login", cors(handleLogin))
 	http.HandleFunc("/api/auth/register", cors(handleRegister))
