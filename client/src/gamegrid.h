@@ -48,6 +48,7 @@ public:
     QList<ServerGame> games() const { return m_games; }
     void filterByText(const QString &text);
     void filterByStatus(const QString &status);
+    void filterByCategory(const QString &category);
 
 signals:
     void gamePlay(int gameId, const QString &name, const QString &exePath, const QString &installPath);
@@ -77,6 +78,7 @@ private:
     QMap<int, QLabel*> m_coverLabels;
     QString m_searchFilter;
     QString m_statusFilter;
+    QString m_categoryFilter;
 
     void buildGrid();
     QWidget* createGameCard(const ServerGame &game);

@@ -107,7 +107,11 @@ void GameGrid::buildGrid() {
             (m_statusFilter == "installed" && installed) ||
             (m_statusFilter == "not_installed" && !installed);
 
-        if (!textMatch || !statusMatch) continue;
+        bool categoryMatch = m_categoryFilter.isEmpty() ||
+            game.tags.toLower().contains(m_categoryFilter.toLower()) ||
+            game.category.toLower().contains(m_categoryFilter.toLower());
+
+        if (!textMatch || !statusMatch || !categoryMatch) continue;
 
         QWidget *card = createGameCard(game);
         m_grid->addWidget(card, row, col);
@@ -323,5 +327,10 @@ void GameGrid::filterByText(const QString &text) {
 
 void GameGrid::filterByStatus(const QString &status) {
     m_statusFilter = status;
+    buildGrid();
+}
+
+void GameGrid::filterByCategory(const QString &category) {
+    m_categoryFilter = category;
     buildGrid();
 }

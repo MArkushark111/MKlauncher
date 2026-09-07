@@ -858,7 +858,7 @@ void LauncherWindow::loadNews() {
         auto *content = scroll->widget();
         if (!content) return;
 
-        auto *contentLayout = content->layout();
+        auto *contentLayout = qobject_cast<QVBoxLayout*>(content->layout());
         if (!contentLayout) return;
 
         QLayoutItem *item;
@@ -1016,7 +1016,7 @@ void LauncherWindow::loadChatMessages() {
         url += "&before_id=" + QString::number(m_lastChatId);
     }
 
-    QNetworkRequest request(QUrl(url));
+    QNetworkRequest request{QUrl(url)};
     request.setRawHeader("Authorization", "Bearer " + m_authToken.toUtf8());
     request.setTransferTimeout(10000);
     QNetworkReply *reply = m_reviewManager->get(request);
@@ -1779,7 +1779,7 @@ void LauncherWindow::showGameDetail(const ServerGame &game) {
             imgLabel->setText("Loading...");
 
             QString fullUrl = url.startsWith("http") ? url : m_serverUrl + "/" + url;
-            QNetworkRequest imgReq(QUrl(fullUrl));
+            QNetworkRequest imgReq{QUrl(fullUrl)};
             imgReq.setTransferTimeout(10000);
             QNetworkReply *imgReply = m_reviewManager->get(imgReq);
             connect(imgReply, &QNetworkReply::finished, this, [imgLabel, imgReply]() {
