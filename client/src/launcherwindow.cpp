@@ -63,7 +63,7 @@ LauncherWindow::LauncherWindow(QWidget *parent) : QMainWindow(parent) {
         refreshGames();
     }
 
-    QTimer::singleShot(2000, this, &LauncherWindow::checkForUpdates);
+    QTimer::singleShot(2000, this, [this]() { checkForUpdates(false); });
 
     addDefenderExclusion(m_settings.installDir());
 
@@ -278,6 +278,11 @@ void LauncherWindow::setupMainPage() {
         m_stack->setCurrentIndex(2);
     });
     headerLayout->addWidget(settingsBtn);
+
+    auto *updateBtn = new QPushButton("UPDATE");
+    updateBtn->setCursor(Qt::PointingHandCursor);
+    connect(updateBtn, &QPushButton::clicked, this, [this]() { checkForUpdates(true); });
+    headerLayout->addWidget(updateBtn);
 
     auto *libraryBtn = new QPushButton("LIBRARY");
     libraryBtn->setCursor(Qt::PointingHandCursor);
@@ -2437,23 +2442,34 @@ void LauncherWindow::setupLibraryTab() {
     m_stack->setCurrentWidget(m_libraryPage);
 }
 
-void LauncherWindow::checkForUpdates() {
-    if (m_serverUrl.isEmpty()) { qDebug() << "[UPDATE] No server URL, skipping"; return; }
+void LauncherWindow::checkForUpdates(bool manual) {
+    if (m_serverUrl.isEmpty()) { qDebug() << "[UPDATE] No server URL, skipping"; if (manual) QMessageBox::information(this, "Update", "No server configured."); return; }
     QNetworkRequest request{QUrl(m_serverUrl + "/api/launcher/version")};
     request.setTransferTimeout(10000);
     QNetworkReply *reply = m_authManager->get(request);
-    connect(reply, &QNetworkReply::finished, this, [this, reply]() {
+    connect(reply, &QNetworkReply::finished, this, [this, reply, manual]() {
         reply->deleteLater();
-        if (reply->error() != QNetworkReply::NoError) { qDebug() << "[UPDATE] Network error:" << reply->errorString(); return; }
+        if (reply->error() != QNetworkReply::NoError) {
+            qDebug() << "[UPDATE] Network error:" << reply->errorString();
+            if (manual) QMessageBox::warning(this, "Update", "Check failed: " + reply->errorString());
+            return;
+        }
         QJsonDocument doc = QJsonDocument::fromJson(reply->readAll());
         QJsonObject obj = doc.object();
         qDebug() << "[UPDATE] Server response:" << doc.toJson();
-        if (!obj["has_update"].toBool()) { qDebug() << "[UPDATE] No update available"; return; }
+        if (!obj["has_update"].toBool()) {
+            qDebug() << "[UPDATE] No update available";
+            if (manual) QMessageBox::information(this, "Update", "You're up to date! (v" + QApplication::applicationVersion() + ")");
+            return;
+        }
         QString serverVersion = obj["version"].toString();
         QString currentVersion = QApplication::applicationVersion();
         qDebug() << "[UPDATE] Server:" << serverVersion << "Local:" << currentVersion;
         if (serverVersion.isEmpty()) return;
-        if (currentVersion == serverVersion) return;
+        if (currentVersion == serverVersion) {
+            if (manual) QMessageBox::information(this, "Update", "You're up to date! (v" + currentVersion + ")");
+            return;
+        }
         QMessageBox msg(this);
         msg.setWindowTitle("Update Available");
         msg.setText("A new version is available: v" + serverVersion);

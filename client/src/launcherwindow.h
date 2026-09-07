@@ -47,7 +47,7 @@ private slots:
     void onSearchChanged(const QString &text);
     void onFilterChanged(int index);
     void onGameDetails(const ServerGame &game);
-    void checkForUpdates();
+    void checkForUpdates(bool manual = false);
 
 private:
     QStackedWidget *m_stack;
