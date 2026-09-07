@@ -83,6 +83,7 @@ function showTab(tab, event) {
         case 'games': loadGames(); break;
         case 'archives': loadArchives(); break;
         case 'admins': loadAdmins(); break;
+        case 'users': loadUsers(); break;
         case 'config': loadConfig(); break;
         case 'notifications': loadNotifications(); break;
     }
@@ -719,6 +720,68 @@ function removeAdmin(username) {
 }
 
 /* Config */
+/* Users */
+function loadUsers() {
+    api('GET', '/api/admin/users').then(data => {
+        const list = document.getElementById('users-list');
+        list.innerHTML = '';
+        if (!data || data.length === 0) {
+            list.innerHTML = '<p style="color:var(--text-dim)">No users registered yet</p>';
+            return;
+        }
+        data.forEach(u => {
+            const statusColor = u.is_banned ? 'var(--danger)' : 'var(--accent)';
+            const statusText = u.is_banned ? 'BANNED' : 'Active';
+            const banBtn = u.is_banned
+                ? `<button class="btn btn-primary btn-sm" onclick="toggleBan(${u.id}, false)">UNBAN</button>`
+                : `<button class="btn btn-danger btn-sm" onclick="toggleBan(${u.id}, true)">BAN</button>`;
+            list.innerHTML += `<div class="archive-item" style="justify-content:space-between">
+                <div>
+                    <span class="name">${u.username}</span>
+                    <span style="color:${statusColor};font-size:11px;margin-left:8px">${statusText}</span>
+                    <span style="color:var(--text-dim);font-size:11px;margin-left:8px">${u.display_name || ''}</span>
+                </div>
+                ${banBtn}
+            </div>`;
+        });
+    });
+}
+
+function searchUsers() {
+    const q = document.getElementById('user-search').value.trim();
+    if (!q) { loadUsers(); return; }
+    api('GET', '/api/users/search?q=' + encodeURIComponent(q)).then(data => {
+        const list = document.getElementById('users-list');
+        list.innerHTML = '';
+        if (!data || data.length === 0) {
+            list.innerHTML = '<p style="color:var(--text-dim)">No users found</p>';
+            return;
+        }
+        data.forEach(u => {
+            const statusColor = u.is_banned ? 'var(--danger)' : 'var(--accent)';
+            const statusText = u.is_banned ? 'BANNED' : 'Active';
+            const banBtn = u.is_banned
+                ? `<button class="btn btn-primary btn-sm" onclick="toggleBan(${u.id}, false)">UNBAN</button>`
+                : `<button class="btn btn-danger btn-sm" onclick="toggleBan(${u.id}, true)">BAN</button>`;
+            list.innerHTML += `<div class="archive-item" style="justify-content:space-between">
+                <div>
+                    <span class="name">${u.username}</span>
+                    <span style="color:${statusColor};font-size:11px;margin-left:8px">${statusText}</span>
+                </div>
+                ${banBtn}
+            </div>`;
+        });
+    });
+}
+
+function toggleBan(userId, ban) {
+    const action = ban ? 'ban' : 'unban';
+    if (!confirm(`Are you sure you want to ${action} this user?`)) return;
+    api('POST', '/api/admin/users/' + userId + '/ban', { banned: ban }).then(() => {
+        loadUsers();
+    });
+}
+
 function loadConfig() {
     api('GET', '/api/config').then(data => {
         document.getElementById('cfg-wan-host').value = data.wan_host || '';
