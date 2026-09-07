@@ -33,6 +33,7 @@ LauncherWindow::LauncherWindow(QWidget *parent) : QMainWindow(parent) {
     m_localDB = new LocalDB(this);
     m_updater = new Updater(this);
     m_authManager = new QNetworkAccessManager(this);
+    m_reviewManager = new QNetworkAccessManager(this);
 
     m_stack = new QStackedWidget(this);
     setCentralWidget(m_stack);
@@ -176,6 +177,13 @@ void LauncherWindow::setupMainPage() {
         m_stack->setCurrentIndex(2);
     });
     headerLayout->addWidget(settingsBtn);
+
+    auto *libraryBtn = new QPushButton("LIBRARY");
+    libraryBtn->setCursor(Qt::PointingHandCursor);
+    connect(libraryBtn, &QPushButton::clicked, [this]() {
+        setupLibraryTab();
+    });
+    headerLayout->addWidget(libraryBtn);
 
     layout->addWidget(header);
 
@@ -650,14 +658,7 @@ void LauncherWindow::resetConnection() {
 }
 
 void LauncherWindow::onGameDetails(const ServerGame &game) {
-    QMessageBox box(this);
-    box.setWindowTitle(game.name);
-    box.setText(QString("%1\nVersion %2\n%3\n\n%4\n\nExecutable: %5")
-        .arg(game.name, game.version, game.category.isEmpty() ? "Uncategorized" : game.category,
-             game.description.isEmpty() ? "No description available." : game.description,
-             game.exePath.isEmpty() ? "Not specified" : game.exePath));
-    box.setInformativeText(QString("Downloads: %1\nSize: %2").arg(game.downloadCount).arg(game.fileSize));
-    box.exec();
+    showGameDetail(game);
 }
 
 void LauncherWindow::onAuthResult(QNetworkReply *reply) {
@@ -923,4 +924,453 @@ void LauncherWindow::onFilterChanged(int index) {
         default: filter = ""; break;
     }
     m_gameGrid->filterByStatus(filter);
+}
+
+void LauncherWindow::showGameDetail(const ServerGame &game) {
+    if (m_detailPage) { m_detailPage->deleteLater(); m_detailPage = nullptr; }
+
+    m_detailPage = new QWidget();
+    m_detailPage->setStyleSheet("background-color: #0a0a0a;");
+    auto *outerLayout = new QVBoxLayout(m_detailPage);
+    outerLayout->setContentsMargins(0, 0, 0, 0);
+    outerLayout->setSpacing(0);
+
+    auto *topBar = new QWidget();
+    topBar->setFixedHeight(60);
+    topBar->setStyleSheet("background-color: #111111; border-bottom: 1px solid #2a2a2a;");
+    auto *topBarLayout = new QHBoxLayout(topBar);
+    topBarLayout->setContentsMargins(24, 0, 24, 0);
+    auto *backBtn = new QPushButton("BACK");
+    backBtn->setCursor(Qt::PointingHandCursor);
+    connect(backBtn, &QPushButton::clicked, [this]() {
+        m_stack->setCurrentIndex(1);
+        m_gameGrid->refreshGrid();
+    });
+    topBarLayout->addWidget(backBtn);
+    topBarLayout->addSpacing(16);
+    auto *title = new QLabel(game.name);
+    title->setStyleSheet("font-size: 18px; font-weight: bold; color: #00ff88; background: transparent; letter-spacing: 2px;");
+    topBarLayout->addWidget(title);
+    topBarLayout->addStretch();
+    outerLayout->addWidget(topBar);
+
+    auto *scroll = new QScrollArea();
+    scroll->setWidgetResizable(true);
+    scroll->setFrameShape(QFrame::NoFrame);
+    scroll->setStyleSheet("background: transparent; border: none;");
+
+    auto *content = new QWidget();
+    content->setStyleSheet("background: transparent;");
+    auto *layout = new QVBoxLayout(content);
+    layout->setContentsMargins(32, 24, 32, 24);
+    layout->setSpacing(16);
+
+    auto *heroWidget = new QWidget();
+    heroWidget->setFixedHeight(300);
+    heroWidget->setStyleSheet("background-color: #111111; border-radius: 12px; border: 1px solid #2a2a2a;");
+    auto *heroLayout = new QHBoxLayout(heroWidget);
+    heroLayout->setContentsMargins(0, 0, 0, 0);
+
+    auto *coverLabel = new QLabel();
+    coverLabel->setFixedWidth(200);
+    coverLabel->setStyleSheet("background-color: #1a1a1a; border-top-left-radius: 12px; border-bottom-left-radius: 12px; color: #555555; font-size: 12px;");
+    coverLabel->setAlignment(Qt::AlignCenter);
+    coverLabel->setText("LOADING...");
+    if (!game.coverUrl.isEmpty()) {
+        QUrl coverUrl(m_gameGrid->imageUrl(game.coverUrl));
+        QNetworkRequest req(coverUrl);
+        req.setTransferTimeout(10000);
+        QNetworkReply *reply = m_reviewManager->get(req);
+        connect(reply, &QNetworkReply::finished, this, [this, coverLabel, reply]() {
+            reply->deleteLater();
+            if (reply->error() != QNetworkReply::NoError) return;
+            QPixmap pixmap;
+            pixmap.loadFromData(reply->readAll());
+            if (!pixmap.isNull()) {
+                coverLabel->setPixmap(pixmap.scaled(coverLabel->size(), Qt::KeepAspectRatioByExpanding, Qt::SmoothTransformation));
+                coverLabel->setText(QString());
+            }
+        });
+    }
+    heroLayout->addWidget(coverLabel);
+
+    auto *infoLayout = new QVBoxLayout();
+    infoLayout->setContentsMargins(24, 16, 24, 16);
+    infoLayout->setSpacing(8);
+
+    auto *nameLabel = new QLabel(game.name);
+    nameLabel->setStyleSheet("color: #e0e0e0; font-size: 24px; font-weight: bold; background: transparent;");
+    infoLayout->addWidget(nameLabel);
+
+    auto *versionLabel = new QLabel(QString("Version %1 | %2").arg(game.version, game.category.isEmpty() ? "Uncategorized" : game.category));
+    versionLabel->setStyleSheet("color: #888888; font-size: 13px; background: transparent;");
+    infoLayout->addWidget(versionLabel);
+
+    if (game.reviewCount > 0) {
+        QString stars;
+        int full = (int)game.avgStars;
+        for (int i = 0; i < full; i++) stars += QChar(0x2605);
+        for (int i = full; i < 5; i++) stars += QChar(0x2606);
+        auto *starLabel = new QLabel(stars + QString("  %1 (%2 reviews)").arg(QString::number(game.avgStars, 'f', 1)).arg(game.reviewCount));
+        starLabel->setStyleSheet("color: #ffaa00; font-size: 16px; background: transparent;");
+        infoLayout->addWidget(starLabel);
+    }
+
+    auto *dlLabel = new QLabel(QString("%1 downloads | %2").arg(game.downloadCount).arg(formatSize(game.fileSize)));
+    dlLabel->setStyleSheet("color: #888888; font-size: 12px; background: transparent;");
+    infoLayout->addWidget(dlLabel);
+
+    infoLayout->addSpacing(8);
+
+    if (!game.tags.isEmpty()) {
+        auto *tagsLabel = new QLabel("Tags: " + game.tags);
+        tagsLabel->setStyleSheet("color: #00ff88; font-size: 12px; background: transparent;");
+        tagsLabel->setWordWrap(true);
+        infoLayout->addWidget(tagsLabel);
+    }
+
+    auto *descLabel = new QLabel(game.description.isEmpty() ? "No description available." : game.description);
+    descLabel->setStyleSheet("color: #cccccc; font-size: 13px; background: transparent; line-height: 1.4;");
+    descLabel->setWordWrap(true);
+    infoLayout->addWidget(descLabel);
+
+    infoLayout->addStretch();
+    heroLayout->addLayout(infoLayout);
+    layout->addWidget(heroWidget);
+
+    LocalDB localDB;
+    bool installed = localDB.isInstalled(game.id);
+
+    auto *btnWidget = new QWidget();
+    btnWidget->setStyleSheet("background: transparent;");
+    auto *btnLayout = new QHBoxLayout(btnWidget);
+    btnLayout->setContentsMargins(0, 0, 0, 0);
+
+    if (installed) {
+        LocalGame localGame = localDB.getGame(game.id);
+        bool needsUpdate = localGame.version != game.version;
+
+        auto *playBtn = new QPushButton("PLAY");
+        playBtn->setObjectName("playBtn");
+        playBtn->setCursor(Qt::PointingHandCursor);
+        playBtn->setStyleSheet(
+            "QPushButton#playBtn { background-color: #00ff88; color: #000000; border: none; border-radius: 6px; font-size: 16px; padding: 14px 48px; font-weight: bold; }"
+            "QPushButton#playBtn:hover { background-color: #00cc6a; }");
+        connect(playBtn, &QPushButton::clicked, [this, game, localGame]() {
+            emit m_gameGrid->gamePlay(game.id, game.name, game.exePath, localGame.installPath);
+        });
+        btnLayout->addWidget(playBtn);
+
+        if (needsUpdate) {
+            auto *updateBtn = new QPushButton("UPDATE");
+            updateBtn->setObjectName("updateBtn");
+            updateBtn->setCursor(Qt::PointingHandCursor);
+            updateBtn->setStyleSheet(
+                "QPushButton#updateBtn { background-color: #ffaa00; color: #000000; border: none; border-radius: 6px; font-size: 14px; padding: 14px 32px; font-weight: bold; }"
+                "QPushButton#updateBtn:hover { background-color: #cc8800; }");
+            connect(updateBtn, &QPushButton::clicked, [this, game, localGame]() {
+                m_gameGrid->gameUpdate(game.id, game.name, localGame.version, game.version,
+                                       m_serverUrl + "/api/games/" + QString::number(game.id) + "/download");
+            });
+            btnLayout->addWidget(updateBtn);
+        }
+
+        auto *uninstallBtn = new QPushButton("UNINSTALL");
+        uninstallBtn->setObjectName("uninstallBtn");
+        uninstallBtn->setCursor(Qt::PointingHandCursor);
+        uninstallBtn->setStyleSheet(
+            "QPushButton#uninstallBtn { background-color: #ff4444; color: #ffffff; border: none; border-radius: 6px; font-size: 14px; padding: 14px 32px; font-weight: bold; }"
+            "QPushButton#uninstallBtn:hover { background-color: #cc3333; }");
+        connect(uninstallBtn, &QPushButton::clicked, [this, game, localGame]() {
+            m_gameGrid->gameUninstall(game.id, game.name, localGame.installPath);
+        });
+        btnLayout->addWidget(uninstallBtn);
+    } else {
+        auto *installBtn = new QPushButton(QString("INSTALL - %1").arg(formatSize(game.fileSize)));
+        installBtn->setObjectName("installBtn");
+        installBtn->setCursor(Qt::PointingHandCursor);
+        installBtn->setStyleSheet(
+            "QPushButton#installBtn { background-color: #ffffff; color: #000000; border: none; border-radius: 6px; font-size: 14px; padding: 14px 48px; font-weight: bold; }"
+            "QPushButton#installBtn:hover { background-color: #e0e0e0; }");
+        connect(installBtn, &QPushButton::clicked, [this, game]() {
+            m_gameGrid->gameDownload(game.id, game.name,
+                                    m_serverUrl + "/api/games/" + QString::number(game.id) + "/download",
+                                    game.fileSize);
+        });
+        btnLayout->addWidget(installBtn);
+    }
+
+    btnLayout->addStretch();
+    layout->addWidget(btnWidget);
+
+    auto *reviewsTitle = new QLabel("REVIEWS");
+    reviewsTitle->setStyleSheet("color: #00ff88; font-size: 16px; font-weight: bold; letter-spacing: 2px; background: transparent; margin-top: 16px;");
+    layout->addWidget(reviewsTitle);
+
+    auto *reviewsContainer = new QWidget();
+    reviewsContainer->setStyleSheet("background: transparent;");
+    auto *reviewsLayout = new QVBoxLayout(reviewsContainer);
+    reviewsLayout->setContentsMargins(0, 0, 0, 0);
+    reviewsLayout->setSpacing(8);
+
+    auto *loadingLabel = new QLabel("Loading reviews...");
+    loadingLabel->setStyleSheet("color: #888888; font-size: 12px; background: transparent;");
+    reviewsLayout->addWidget(loadingLabel);
+    layout->addWidget(reviewsContainer);
+
+    auto *addReviewWidget = new QWidget();
+    addReviewWidget->setStyleSheet("background-color: #1a1a1a; border: 1px solid #2a2a2a; border-radius: 8px; padding: 16px;");
+    auto *reviewFormLayout = new QVBoxLayout(addReviewWidget);
+    reviewFormLayout->setSpacing(8);
+
+    auto *reviewTitle = new QLabel("WRITE A REVIEW");
+    reviewTitle->setStyleSheet("color: #00ff88; font-size: 13px; font-weight: bold; background: transparent; letter-spacing: 1px;");
+    reviewFormLayout->addWidget(reviewTitle);
+
+    auto *reviewerName = new QLineEdit();
+    reviewerName->setPlaceholderText("Your name");
+    reviewerName->setStyleSheet("background-color: #111111; color: #e0e0e0; border: 1px solid #2a2a2a; border-radius: 4px; padding: 8px 12px; font-size: 13px;");
+    reviewFormLayout->addWidget(reviewerName);
+
+    auto *starsWidget = new QWidget();
+    starsWidget->setStyleSheet("background: transparent;");
+    auto *starsLayout = new QHBoxLayout(starsWidget);
+    starsLayout->setContentsMargins(0, 0, 0, 0);
+    starsLayout->setSpacing(4);
+    int selectedStars = 5;
+    QList<QPushButton*> starBtns;
+    for (int i = 1; i <= 5; i++) {
+        auto *starBtn = new QPushButton(QString(QChar(0x2605)));
+        starBtn->setStyleSheet("color: #ffaa00; font-size: 24px; background: transparent; border: none; padding: 2px;");
+        starBtn->setCursor(Qt::PointingHandCursor);
+        starBtns.append(starBtn);
+        starsLayout->addWidget(starBtn);
+    }
+    starsLayout->addStretch();
+    reviewFormLayout->addWidget(starsWidget);
+
+    auto *reviewInput = new QLineEdit();
+    reviewInput->setPlaceholderText("Review title (optional)");
+    reviewInput->setStyleSheet("background-color: #111111; color: #e0e0e0; border: 1px solid #2a2a2a; border-radius: 4px; padding: 8px 12px; font-size: 13px;");
+    reviewFormLayout->addWidget(reviewInput);
+
+    auto *reviewTextInput = new QLineEdit();
+    reviewTextInput->setPlaceholderText("Write your review...");
+    reviewTextInput->setStyleSheet("background-color: #111111; color: #e0e0e0; border: 1px solid #2a2a2a; border-radius: 4px; padding: 8px 12px; font-size: 13px;");
+    reviewFormLayout->addWidget(reviewTextInput);
+
+    auto *submitReviewBtn = new QPushButton("SUBMIT REVIEW");
+    submitReviewBtn->setCursor(Qt::PointingHandCursor);
+    submitReviewBtn->setStyleSheet(
+        "QPushButton { background-color: #00ff88; color: #000000; border: none; border-radius: 4px; padding: 10px; font-size: 12px; font-weight: bold; }"
+        "QPushButton:hover { background-color: #00cc6a; }");
+    reviewFormLayout->addWidget(submitReviewBtn);
+    layout->addWidget(addReviewWidget);
+
+    for (int i = 0; i < 5; i++) {
+        connect(starBtns[i], &QPushButton::clicked, this, [starBtns, i, &selectedStars]() mutable {
+            selectedStars = i + 1;
+            for (int j = 0; j < 5; j++) {
+                starBtns[j]->setText(j <= i ? QString(QChar(0x2605)) : QString(QChar(0x2606)));
+            }
+        });
+    }
+
+    connect(submitReviewBtn, &QPushButton::clicked, this, [this, game, reviewerName, reviewInput, reviewTextInput, &selectedStars, reviewsContainer, reviewsLayout, loadingLabel]() {
+        if (reviewerName->text().trimmed().isEmpty()) {
+            QMessageBox::warning(m_detailPage, "Error", "Enter your name");
+            return;
+        }
+        QJsonObject obj;
+        obj["username"] = reviewerName->text().trimmed();
+        obj["stars"] = selectedStars;
+        obj["title"] = reviewInput->text().trimmed();
+        obj["text"] = reviewTextInput->text().trimmed();
+        QNetworkRequest request(QUrl(m_serverUrl + "/api/games/" + QString::number(game.id) + "/reviews"));
+        request.setHeader(QNetworkRequest::ContentTypeHeader, "application/json");
+        request.setRawHeader("Authorization", "Bearer " + m_authToken.toUtf8());
+        QNetworkReply *reply = m_reviewManager->post(request, QJsonDocument(obj).toJson());
+        connect(reply, &QNetworkReply::finished, this, [this, reply, game, reviewsContainer, reviewsLayout, loadingLabel, reviewInput, reviewTextInput]() {
+            reply->deleteLater();
+            reviewInput->clear();
+            reviewTextInput->clear();
+            showNotification("Review", "Review submitted!");
+        });
+    });
+
+    layout->addStretch();
+    scroll->setWidget(content);
+    outerLayout->addWidget(scroll);
+
+    m_stack->addWidget(m_detailPage);
+    m_stack->setCurrentWidget(m_detailPage);
+
+    QNetworkRequest reviewReq(QUrl(m_serverUrl + "/api/games/" + QString::number(game.id) + "/reviews"));
+    reviewReq.setRawHeader("Authorization", "Bearer " + m_authToken.toUtf8());
+    reviewReq.setTransferTimeout(10000);
+    QNetworkReply *reviewReply = m_reviewManager->get(reviewReq);
+    connect(reviewReply, &QNetworkReply::finished, this, [this, reviewReply, game, reviewsContainer, reviewsLayout, loadingLabel]() {
+        reviewReply->deleteLater();
+        delete loadingLabel;
+        QByteArray data = reviewReply->readAll();
+        QJsonDocument doc = QJsonDocument::fromJson(data);
+        QJsonObject obj = doc.object();
+        QJsonArray reviews = obj["reviews"].toArray();
+        for (const QJsonValue &val : reviews) {
+            QJsonObject r = val.toObject();
+            auto *reviewCard = new QWidget();
+            reviewCard->setStyleSheet("background-color: #1a1a1a; border: 1px solid #2a2a2a; border-radius: 8px; padding: 12px;");
+            auto *rcLayout = new QVBoxLayout(reviewCard);
+            rcLayout->setSpacing(4);
+            rcLayout->setContentsMargins(12, 8, 12, 8);
+
+            QString stars;
+            int s = r["stars"].toInt();
+            for (int i = 0; i < s; i++) stars += QChar(0x2605);
+            for (int i = s; i < 5; i++) stars += QChar(0x2606);
+
+            auto *starsLbl = new QLabel(stars);
+            starsLbl->setStyleSheet("color: #ffaa00; font-size: 14px; background: transparent;");
+            rcLayout->addWidget(starsLbl);
+
+            QString titleText = r["username"].toString();
+            if (!r["title"].toString().isEmpty()) titleText += " - " + r["title"].toString();
+            auto *authorLbl = new QLabel(titleText);
+            authorLbl->setStyleSheet("color: #e0e0e0; font-size: 13px; font-weight: bold; background: transparent;");
+            rcLayout->addWidget(authorLbl);
+
+            if (!r["text"].toString().isEmpty()) {
+                auto *textLbl = new QLabel(r["text"].toString());
+                textLbl->setStyleSheet("color: #cccccc; font-size: 12px; background: transparent;");
+                textLbl->setWordWrap(true);
+                rcLayout->addWidget(textLbl);
+            }
+
+            reviewsLayout->addWidget(reviewCard);
+        }
+        if (reviews.isEmpty()) {
+            auto *noReviews = new QLabel("No reviews yet. Be the first!");
+            noReviews->setStyleSheet("color: #555555; font-size: 13px; background: transparent; padding: 16px;");
+            reviewsLayout->addWidget(noReviews);
+        }
+    });
+}
+
+void LauncherWindow::setupLibraryTab() {
+    if (m_libraryPage) { m_libraryPage->deleteLater(); m_libraryPage = nullptr; }
+
+    m_libraryPage = new QWidget();
+    m_libraryPage->setStyleSheet("background-color: #0a0a0a;");
+    auto *outerLayout = new QVBoxLayout(m_libraryPage);
+    outerLayout->setContentsMargins(0, 0, 0, 0);
+    outerLayout->setSpacing(0);
+
+    auto *topBar = new QWidget();
+    topBar->setFixedHeight(60);
+    topBar->setStyleSheet("background-color: #111111; border-bottom: 1px solid #2a2a2a;");
+    auto *topBarLayout = new QHBoxLayout(topBar);
+    topBarLayout->setContentsMargins(24, 0, 24, 0);
+    auto *backBtn = new QPushButton("BACK");
+    backBtn->setCursor(Qt::PointingHandCursor);
+    connect(backBtn, &QPushButton::clicked, [this]() {
+        m_stack->setCurrentIndex(1);
+        m_gameGrid->refreshGrid();
+    });
+    topBarLayout->addWidget(backBtn);
+    topBarLayout->addSpacing(16);
+    auto *libTitle = new QLabel("MY LIBRARY");
+    libTitle->setStyleSheet("font-size: 18px; font-weight: bold; color: #00ff88; background: transparent; letter-spacing: 3px;");
+    topBarLayout->addWidget(libTitle);
+    topBarLayout->addStretch();
+    outerLayout->addWidget(topBar);
+
+    auto *scroll = new QScrollArea();
+    scroll->setWidgetResizable(true);
+    scroll->setFrameShape(QFrame::NoFrame);
+    scroll->setStyleSheet("background: transparent; border: none;");
+
+    auto *content = new QWidget();
+    content->setStyleSheet("background: transparent;");
+    auto *layout = new QVBoxLayout(content);
+    layout->setContentsMargins(24, 24, 24, 24);
+    layout->setSpacing(12);
+
+    QList<LocalGame> installedGames = m_localDB->getAllGames();
+    if (installedGames.isEmpty()) {
+        auto *empty = new QLabel("No games installed yet.\nDownload games from the store!");
+        empty->setAlignment(Qt::AlignCenter);
+        empty->setStyleSheet("color: #555555; font-size: 14px; padding: 80px;");
+        layout->addWidget(empty);
+    } else {
+        for (const LocalGame &game : installedGames) {
+            auto *card = new QWidget();
+            card->setStyleSheet("background-color: #1a1a1a; border: 1px solid #2a2a2a; border-radius: 8px;");
+            auto *cardLayout = new QHBoxLayout(card);
+            cardLayout->setContentsMargins(16, 12, 16, 12);
+            cardLayout->setSpacing(16);
+
+            auto *coverLbl = new QLabel();
+            coverLbl->setFixedSize(80, 80);
+            coverLbl->setStyleSheet("background-color: #111111; border-radius: 8px;");
+            coverLbl->setAlignment(Qt::AlignCenter);
+            if (!game.coverUrl.isEmpty()) {
+                QString url = game.coverUrl;
+                if (url.startsWith("storage/covers/")) url = url.mid(QString("storage/").length());
+                QNetworkRequest req(QUrl(m_serverUrl + "/" + url));
+                req.setTransferTimeout(10000);
+                QNetworkReply *reply = m_reviewManager->get(req);
+                connect(reply, &QNetworkReply::finished, this, [coverLbl, reply]() {
+                    reply->deleteLater();
+                    if (reply->error() == QNetworkReply::NoError) {
+                        QPixmap pixmap;
+                        pixmap.loadFromData(reply->readAll());
+                        if (!pixmap.isNull()) {
+                            coverLbl->setPixmap(pixmap.scaled(80, 80, Qt::KeepAspectRatioByExpanding, Qt::SmoothTransformation));
+                        }
+                    }
+                });
+            } else {
+                coverLbl->setText("GAME");
+            }
+            cardLayout->addWidget(coverLbl);
+
+            auto *infoLayout = new QVBoxLayout();
+            infoLayout->setSpacing(4);
+            auto *nameLbl = new QLabel(game.name);
+            nameLbl->setStyleSheet("color: #e0e0e0; font-size: 16px; font-weight: bold; background: transparent;");
+            infoLayout->addWidget(nameLbl);
+
+            auto *metaLbl = new QLabel("v" + game.version + " | " + game.category);
+            metaLbl->setStyleSheet("color: #888888; font-size: 12px; background: transparent;");
+            infoLayout->addWidget(metaLbl);
+
+            if (!game.lastPlayed.isNull()) {
+                auto *playedLbl = new QLabel("Last played: " + game.lastPlayed.toString("MMM d, h:mm AP"));
+                playedLbl->setStyleSheet("color: #555555; font-size: 11px; background: transparent;");
+                infoLayout->addWidget(playedLbl);
+            }
+            infoLayout->addStretch();
+            cardLayout->addLayout(infoLayout);
+
+            auto *playBtn = new QPushButton("PLAY");
+            playBtn->setObjectName("playBtn");
+            playBtn->setCursor(Qt::PointingHandCursor);
+            playBtn->setStyleSheet(
+                "QPushButton#playBtn { background-color: #00ff88; color: #000000; border: none; border-radius: 6px; font-size: 14px; padding: 12px 32px; font-weight: bold; }"
+                "QPushButton#playBtn:hover { background-color: #00cc6a; }");
+            connect(playBtn, &QPushButton::clicked, this, [this, game]() {
+                launchGame(game.exePath, game.installPath);
+                m_localDB->updateLastPlayed(game.serverGameId);
+            });
+            cardLayout->addWidget(playBtn);
+
+            layout->addWidget(card);
+        }
+    }
+
+    layout->addStretch();
+    scroll->setWidget(content);
+    outerLayout->addWidget(scroll);
+
+    m_stack->addWidget(m_libraryPage);
 }

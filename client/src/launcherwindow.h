@@ -69,12 +69,15 @@ private:
     Settings m_settings;
 
     QNetworkAccessManager *m_authManager;
+    QNetworkAccessManager *m_reviewManager;
     QString m_serverUrl;
     QString m_authToken;
 
     int m_currentDownloadGameId = 0;
     QString m_currentDownloadName;
     QString m_pendingArchivePath;
+    QWidget *m_detailPage = nullptr;
+    QWidget *m_libraryPage = nullptr;
 
     void setupConnectPage();
     void setupMainPage();
@@ -86,6 +89,8 @@ private:
     void showNotification(const QString &title, const QString &msg);
     void addDefenderExclusion(const QString &path);
     QString gameInstallPath(const QString &name);
+    void showGameDetail(const ServerGame &game);
+    void setupLibraryTab();
 };
 
 #endif

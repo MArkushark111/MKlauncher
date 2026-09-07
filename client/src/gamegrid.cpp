@@ -73,6 +73,8 @@ void GameGrid::onGamesLoaded(QNetworkReply *reply) {
             game.exePath = obj["exe_path"].toString();
             game.fileSize = obj["file_size"].toVariant().toLongLong();
             game.downloadCount = obj["download_count"].toInt();
+            game.avgStars = obj["avg_stars"].toDouble();
+            game.reviewCount = obj["review_count"].toInt();
             m_games.append(game);
         }
     }
@@ -178,10 +180,24 @@ QWidget* GameGrid::createGameCard(const ServerGame &game) {
     infoLayout->addWidget(nameLabel);
 
     QLabel *metaLabel = new QLabel(
-        QString("v%1 | %2 | %3 downloads").arg(game.version, game.category.isEmpty() ? "N/A" : game.category).arg(game.downloadCount),
+        QString("v%1 | %2 | %3 downloads | %4 %5")
+            .arg(game.version, game.category.isEmpty() ? "N/A" : game.category)
+            .arg(game.downloadCount)
+            .arg(QString::number(game.avgStars, 'f', 1))
+            .arg(game.reviewCount == 0 ? "No reviews" : QString::number(game.reviewCount) + " reviews"),
         infoWidget);
     metaLabel->setStyleSheet("color: #888888; font-size: 11px; background: transparent;");
     infoLayout->addWidget(metaLabel);
+
+    if (game.reviewCount > 0) {
+        QString stars;
+        int full = (int)game.avgStars;
+        for (int i = 0; i < full; i++) stars += QChar(0x2605);
+        for (int i = full; i < 5; i++) stars += QChar(0x2606);
+        QLabel *starLabel = new QLabel(stars, infoWidget);
+        starLabel->setStyleSheet("color: #ffaa00; font-size: 14px; background: transparent;");
+        infoLayout->addWidget(starLabel);
+    }
 
     layout->addWidget(infoWidget);
 

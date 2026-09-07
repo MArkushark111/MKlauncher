@@ -34,6 +34,8 @@ struct ServerGame {
     QString exePath;
     qint64 fileSize = 0;
     int downloadCount = 0;
+    double avgStars = 0;
+    int reviewCount = 0;
 };
 
 class GameGrid : public QWidget {
