@@ -251,6 +251,53 @@ function deleteServer(id) {
     api('DELETE', '/api/servers/' + id).then(() => loadServersAdmin());
 }
 
+/* Launcher Updates */
+function loadLauncherAdmin() {
+    api('GET', '/api/launcher/version').then(data => {
+        const el = document.getElementById('launcher-current');
+        if (data.has_update) {
+            el.innerHTML = `<div class="archive-item" style="justify-content:space-between">
+                <div>
+                    <span class="name">v${data.version}</span>
+                    <span style="color:var(--text-dim);font-size:12px;margin-left:8px">${data.file_size ? (data.file_size / 1048576).toFixed(1) + ' MB' : ''}</span>
+                    <span style="color:var(--text-dim);font-size:12px;margin-left:8px">${data.created_at || ''}</span>
+                </div>
+            </div>
+            ${data.changelog ? '<div style="margin-top:8px;color:var(--text-dim);font-size:12px">' + data.changelog + '</div>' : ''}`;
+        } else {
+            el.innerHTML = '<p style="color:var(--text-dim)">No updates uploaded yet</p>';
+        }
+    });
+}
+
+function uploadLauncherUpdate() {
+    const version = document.getElementById('launcher-version').value.trim();
+    const changelog = document.getElementById('launcher-changelog').value.trim();
+    const fileInput = document.getElementById('launcher-file');
+    if (!version) { alert('Enter version number'); return; }
+    if (!fileInput.files.length) { alert('Select setup file'); return; }
+    const formData = new FormData();
+    formData.append('version', version);
+    formData.append('changelog', changelog);
+    formData.append('file', fileInput.files[0]);
+    const token = localStorage.getItem('admin_token');
+    fetch('/api/admin/launcher/upload', {
+        method: 'POST',
+        headers: { 'Authorization': 'Bearer ' + token },
+        body: formData
+    }).then(r => r.json()).then(data => {
+        if (data.success) {
+            document.getElementById('launcher-version').value = '';
+            document.getElementById('launcher-changelog').value = '';
+            fileInput.value = '';
+            loadLauncherAdmin();
+            alert('Launcher v' + version + ' uploaded! All launchers will update on next start.');
+        } else {
+            alert(data.error || 'Upload failed');
+        }
+    }).catch(e => alert('Upload failed: ' + e));
+}
+
 function logout() {
     authToken = '';
     localStorage.removeItem('mk_token');
@@ -280,6 +327,7 @@ function showTab(tab, event) {
         case 'featured': loadFeaturedAdmin(); break;
         case 'mods': loadModsAdmin(); break;
         case 'servers': loadServersAdmin(); break;
+        case 'launcher': loadLauncherAdmin(); break;
         case 'config': loadConfig(); break;
         case 'notifications': loadNotifications(); break;
     }

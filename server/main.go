@@ -168,6 +168,10 @@ func main() {
 	router.HandleFunc("/api/users/{id:[0-9]+}/profile", api.HandleGetUserProfile).Methods("GET")
 	router.HandleFunc("/api/users/{id:[0-9]+}/games", api.HandleGetUserGames).Methods("GET")
 
+	router.HandleFunc("/api/launcher/version", api.HandleGetLauncherVersion).Methods("GET")
+	router.HandleFunc("/api/launcher/download", api.HandleDownloadLauncherUpdate).Methods("GET")
+	router.HandleFunc("/api/admin/launcher/upload", api.RequireAuth(api.HandleUploadLauncherUpdate)).Methods("POST")
+
 	router.PathPrefix("/covers/").HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		coversDir := filepath.Join(StorageDir, "covers")
 		fileName := strings.TrimPrefix(r.URL.Path, "/covers/")

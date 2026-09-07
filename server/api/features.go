@@ -1345,3 +1345,83 @@ func HandleAddCategory(w http.ResponseWriter, r *http.Request) {
 	}
 	json.NewEncoder(w).Encode(map[string]interface{}{"success": true})
 }
+
+func HandleGetLauncherVersion(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	var id int
+	var version, changelog, filePath string
+	var fileSize int
+	var createdAt string
+	err := db.DB.Conn.QueryRow("SELECT id, version, changelog, file_path, file_size, created_at FROM launcher_updates ORDER BY id DESC LIMIT 1").
+		Scan(&id, &version, &changelog, &filePath, &fileSize, &createdAt)
+	if err != nil {
+		json.NewEncoder(w).Encode(map[string]interface{}{"has_update": false})
+		return
+	}
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"has_update": true,
+		"id":         id,
+		"version":    version,
+		"changelog":  changelog,
+		"file_size":  fileSize,
+		"created_at": createdAt,
+	})
+}
+
+func HandleUploadLauncherUpdate(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	if err := r.ParseMultipartForm(500 << 20); err != nil {
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(map[string]string{"error": "Invalid form data"})
+		return
+	}
+	version := r.FormValue("version")
+	changelog := r.FormValue("changelog")
+	if version == "" {
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(map[string]string{"error": "Version required"})
+		return
+	}
+	fh, err := r.FormFile("file")
+	if err != nil {
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(map[string]string{"error": "No file uploaded"})
+		return
+	}
+	defer fh.Close()
+	os.MkdirAll("storage/updates", 0755)
+	filename := fmt.Sprintf("MKLauncher-Setup-%s.exe", version)
+	dstPath := filepath.Join("storage/updates", filename)
+	dst, err := os.Create(dstPath)
+	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		json.NewEncoder(w).Encode(map[string]string{"error": "Failed to save file"})
+		return
+	}
+	defer dst.Close()
+	written, err := io.Copy(dst, fh)
+	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		json.NewEncoder(w).Encode(map[string]string{"error": "Failed to write file"})
+		return
+	}
+	db.DB.Conn.Exec("INSERT INTO launcher_updates (version, changelog, file_path, file_size) VALUES (?, ?, ?, ?)",
+		version, changelog, dstPath, written)
+	log.Printf("[API] Launcher update uploaded: v%s (%d bytes)", version, written)
+	json.NewEncoder(w).Encode(map[string]interface{}{"success": true, "version": version, "file_size": written})
+}
+
+func HandleDownloadLauncherUpdate(w http.ResponseWriter, r *http.Request) {
+	var filePath string
+	err := db.DB.Conn.QueryRow("SELECT file_path FROM launcher_updates ORDER BY id DESC LIMIT 1").Scan(&filePath)
+	if err != nil || filePath == "" {
+		http.NotFound(w, r)
+		return
+	}
+	if info, err := os.Stat(filePath); err == nil && !info.IsDir() {
+		w.Header().Set("Content-Disposition", "attachment; filename="+filepath.Base(filePath))
+		http.ServeFile(w, r, filePath)
+		return
+	}
+	http.NotFound(w, r)
+}

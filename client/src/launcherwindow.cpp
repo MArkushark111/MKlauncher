@@ -24,6 +24,7 @@
 #include <QScrollArea>
 #include <QTextBrowser>
 #include <QDateTime>
+#include <QApplication>
 
 LauncherWindow::LauncherWindow(QWidget *parent) : QMainWindow(parent) {
     setWindowTitle("MKLAUNCHER");
@@ -55,8 +56,10 @@ LauncherWindow::LauncherWindow(QWidget *parent) : QMainWindow(parent) {
     if (!m_settings.firstRun() && !m_settings.serverUrl().isEmpty()) {
         m_urlInput->setText(m_settings.serverUrl());
         m_stack->setCurrentIndex(1);
-        connectToServer(m_settings.serverUrl(), "");
+        refreshGames();
     }
+
+    QTimer::singleShot(2000, this, &LauncherWindow::checkForUpdates);
 
     addDefenderExclusion(m_settings.installDir());
 
@@ -2422,4 +2425,55 @@ void LauncherWindow::setupLibraryTab() {
 
     m_stack->addWidget(m_libraryPage);
     m_stack->setCurrentWidget(m_libraryPage);
+}
+
+void LauncherWindow::checkForUpdates() {
+    if (m_serverUrl.isEmpty()) return;
+    QNetworkRequest request{QUrl(m_serverUrl + "/api/launcher/version")};
+    request.setTransferTimeout(10000);
+    QNetworkReply *reply = m_authManager->get(request);
+    connect(reply, &QNetworkReply::finished, this, [this, reply]() {
+        reply->deleteLater();
+        if (reply->error() != QNetworkReply::NoError) return;
+        QJsonDocument doc = QJsonDocument::fromJson(reply->readAll());
+        QJsonObject obj = doc.object();
+        if (!obj["has_update"].toBool()) return;
+        QString serverVersion = obj["version"].toString();
+        QString currentVersion = QApplication::applicationVersion();
+        if (serverVersion.isEmpty()) return;
+        if (currentVersion == serverVersion) return;
+        QMessageBox msg(this);
+        msg.setWindowTitle("Update Available");
+        msg.setText("A new version is available: v" + serverVersion);
+        msg.setInformativeText("Current version: v" + currentVersion + "\n\n" +
+            (obj["changelog"].toString().isEmpty() ? "" : "What's new:\n" + obj["changelog"].toString() + "\n\n") +
+            "Do you want to download and install the update?");
+        msg.setStandardButtons(QMessageBox::Yes | QMessageBox::No);
+        msg.setDefaultButton(QMessageBox::Yes);
+        if (msg.exec() == QMessageBox::Yes) {
+            QString downloadUrl = m_serverUrl + "/api/launcher/download";
+            QString savePath = QDir::temp().filePath("MKLauncher-Setup-v" + serverVersion + ".exe");
+            QNetworkRequest dlReq{QUrl(downloadUrl)};
+            dlReq.setTransferTimeout(300000);
+            QNetworkReply *dlReply = m_authManager->get(dlReq);
+            connect(dlReply, &QNetworkReply::finished, this, [this, dlReply, savePath, serverVersion]() {
+                dlReply->deleteLater();
+                if (dlReply->error() != QNetworkReply::NoError) {
+                    QMessageBox::warning(this, "Update Failed", "Download failed: " + dlReply->errorString());
+                    return;
+                }
+                QFile file(savePath);
+                if (file.open(QIODevice::WriteOnly)) {
+                    file.write(dlReply->readAll());
+                    file.close();
+#ifdef Q_OS_WIN
+                    QProcess::startDetached(savePath, {});
+#else
+                    QProcess::startDetached("xdg-open", {savePath});
+#endif
+                    QApplication::quit();
+                }
+            });
+        }
+    });
 }

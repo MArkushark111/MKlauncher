@@ -63,6 +63,9 @@
                 <li class="nav-item" onclick="showTab('servers', event)">
                     <span class="nav-icon">&#127760;</span> Servers
                 </li>
+                <li class="nav-item" onclick="showTab('launcher', event)">
+                    <span class="nav-icon">&#128225;</span> Launcher
+                </li>
                 <li class="nav-item" onclick="showTab('config', event)">
                     <span class="nav-icon">&#9881;</span> Config
                 </li>
@@ -427,6 +430,30 @@
                 <div class="card">
                     <h3>ALL SERVERS</h3>
                     <div id="servers-list"></div>
+                </div>
+            </div>
+
+            <div id="tab-launcher" class="tab hidden">
+                <h2 class="tab-title">LAUNCHER UPDATES</h2>
+                <div class="card">
+                    <h3>UPLOAD NEW VERSION</h3>
+                    <div class="form-group">
+                        <label>VERSION</label>
+                        <input type="text" id="launcher-version" placeholder="1.0.1">
+                    </div>
+                    <div class="form-group">
+                        <label>CHANGELOG</label>
+                        <textarea id="launcher-changelog" placeholder="What's new..." style="min-height:80px"></textarea>
+                    </div>
+                    <div class="form-group">
+                        <label>SETUP FILE (.exe)</label>
+                        <input type="file" id="launcher-file" accept=".exe">
+                    </div>
+                    <button class="btn btn-primary" onclick="uploadLauncherUpdate()">UPLOAD & PUBLISH</button>
+                </div>
+                <div class="card">
+                    <h3>CURRENT VERSION</h3>
+                    <div id="launcher-current"></div>
                 </div>
             </div>
 

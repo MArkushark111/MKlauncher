@@ -286,6 +286,14 @@ func (d *Database) migrate() error {
 			created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
 			FOREIGN KEY (game_id) REFERENCES games(id) ON DELETE CASCADE
 		)`,
+		`CREATE TABLE IF NOT EXISTS launcher_updates (
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			version TEXT NOT NULL,
+			changelog TEXT DEFAULT '',
+			file_path TEXT DEFAULT '',
+			file_size INTEGER DEFAULT 0,
+			created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+		)`,
 	}
 
 	for _, q := range queries {
