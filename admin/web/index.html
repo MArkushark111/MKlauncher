@@ -48,6 +48,21 @@
                 <li class="nav-item" onclick="showTab('users', event)">
                     <span class="nav-icon">&#128101;</span> Users
                 </li>
+                <li class="nav-item" onclick="showTab('news', event)">
+                    <span class="nav-icon">&#128240;</span> News
+                </li>
+                <li class="nav-item" onclick="showTab('categories', event)">
+                    <span class="nav-icon">&#128196;</span> Categories
+                </li>
+                <li class="nav-item" onclick="showTab('featured', event)">
+                    <span class="nav-icon">&#11088;</span> Featured
+                </li>
+                <li class="nav-item" onclick="showTab('mods', event)">
+                    <span class="nav-icon">&#128230;</span> Mods
+                </li>
+                <li class="nav-item" onclick="showTab('servers', event)">
+                    <span class="nav-icon">&#127760;</span> Servers
+                </li>
                 <li class="nav-item" onclick="showTab('config', event)">
                     <span class="nav-icon">&#9881;</span> Config
                 </li>
@@ -294,6 +309,124 @@
                 <div class="card">
                     <h3>ALL USERS</h3>
                     <div id="users-list"></div>
+                </div>
+            </div>
+
+            <div id="tab-news" class="tab hidden">
+                <h2 class="tab-title">NEWS & ANNOUNCEMENTS</h2>
+                <div class="card">
+                    <h3>CREATE NEWS POST</h3>
+                    <div class="form-group">
+                        <label>TITLE</label>
+                        <input type="text" id="news-title" placeholder="News title">
+                    </div>
+                    <div class="form-group">
+                        <label>CONTENT</label>
+                        <textarea id="news-content" placeholder="News content..." style="min-height:100px"></textarea>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group" style="flex:1">
+                            <label>IMAGE URL (optional)</label>
+                            <input type="text" id="news-image" placeholder="https://...">
+                        </div>
+                        <div class="form-group">
+                            <label>PINNED</label>
+                            <select id="news-pinned">
+                                <option value="0">No</option>
+                                <option value="1">Yes</option>
+                            </select>
+                        </div>
+                    </div>
+                    <button class="btn btn-primary" onclick="createNews()">POST NEWS</button>
+                </div>
+                <div class="card">
+                    <h3>ALL NEWS</h3>
+                    <div id="news-list"></div>
+                </div>
+            </div>
+
+            <div id="tab-categories" class="tab hidden">
+                <h2 class="tab-title">CATEGORIES</h2>
+                <div class="card">
+                    <div class="form-row">
+                        <div class="form-group" style="flex:1">
+                            <label>NEW CATEGORY NAME</label>
+                            <input type="text" id="new-cat-name" placeholder="Category name">
+                        </div>
+                        <div class="form-group" style="flex:1">
+                            <label>ICON (emoji)</label>
+                            <input type="text" id="new-cat-icon" placeholder="🎮">
+                        </div>
+                        <div class="form-group" style="align-self:flex-end">
+                            <button class="btn btn-primary" onclick="createCategory()">ADD</button>
+                        </div>
+                    </div>
+                </div>
+                <div class="card">
+                    <h3>ALL CATEGORIES</h3>
+                    <div id="categories-list"></div>
+                </div>
+            </div>
+
+            <div id="tab-featured" class="tab hidden">
+                <h2 class="tab-title">FEATURED GAMES</h2>
+                <div class="card">
+                    <h3>SET FEATURED</h3>
+                    <div class="form-row">
+                        <div class="form-group" style="flex:1">
+                            <label>SELECT GAME</label>
+                            <select id="featured-game-select"></select>
+                        </div>
+                        <div class="form-group" style="align-self:flex-end">
+                            <button class="btn btn-primary" onclick="setFeatured()">FEATURE</button>
+                        </div>
+                    </div>
+                </div>
+                <div class="card">
+                    <h3>CURRENTLY FEATURED</h3>
+                    <div id="featured-list"></div>
+                </div>
+            </div>
+
+            <div id="tab-mods" class="tab hidden">
+                <h2 class="tab-title">ALL MODS</h2>
+                <div class="card">
+                    <div id="mods-list"></div>
+                </div>
+            </div>
+
+            <div id="tab-servers" class="tab hidden">
+                <h2 class="tab-title">MULTIPLAYER SERVERS</h2>
+                <div class="card">
+                    <div class="form-row">
+                        <div class="form-group" style="flex:1">
+                            <label>GAME</label>
+                            <select id="server-game-select"></select>
+                        </div>
+                        <div class="form-group" style="flex:1">
+                            <label>SERVER NAME</label>
+                            <input type="text" id="server-name" placeholder="My Server">
+                        </div>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group" style="flex:1">
+                            <label>IP</label>
+                            <input type="text" id="server-ip" placeholder="192.168.1.1">
+                        </div>
+                        <div class="form-group" style="flex:1">
+                            <label>PORT</label>
+                            <input type="number" id="server-port" placeholder="27015">
+                        </div>
+                        <div class="form-group" style="flex:1">
+                            <label>MAX PLAYERS</label>
+                            <input type="number" id="server-max" placeholder="32" value="32">
+                        </div>
+                    </div>
+                    <button class="btn btn-primary" onclick="addServer()">ADD SERVER</button>
+                </div>
+                <div class="card">
+                    <h3>ALL SERVERS</h3>
+                    <div id="servers-list"></div>
                 </div>
             </div>
 

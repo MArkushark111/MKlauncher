@@ -1323,3 +1323,25 @@ func HandleGetUserGames(w http.ResponseWriter, r *http.Request) {
 	}
 	json.NewEncoder(w).Encode(games)
 }
+
+func HandleAddCategory(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	var req struct {
+		Name string `json:"name"`
+		Icon string `json:"icon"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req.Name == "" {
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(map[string]string{"error": "Name required"})
+		return
+	}
+	var maxOrder int
+	db.DB.Conn.QueryRow("SELECT COALESCE(MAX(sort_order),0) FROM categories").Scan(&maxOrder)
+	_, err := db.DB.Conn.Exec("INSERT INTO categories (name, icon, sort_order) VALUES (?, ?, ?)", req.Name, req.Icon, maxOrder+1)
+	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		json.NewEncoder(w).Encode(map[string]string{"error": err.Error()})
+		return
+	}
+	json.NewEncoder(w).Encode(map[string]interface{}{"success": true})
+}

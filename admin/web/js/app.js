@@ -60,6 +60,197 @@ function showAdminScreen() {
     loadDashboard();
 }
 
+/* News Admin */
+function loadNewsAdmin() {
+    api('GET', '/api/news').then(data => {
+        const list = document.getElementById('news-list');
+        list.innerHTML = '';
+        if (!data || data.length === 0) {
+            list.innerHTML = '<p style="color:var(--text-dim)">No news posts</p>';
+            return;
+        }
+        data.forEach(n => {
+            list.innerHTML += `<div class="archive-item" style="flex-direction:column;gap:4px">
+                <div style="display:flex;justify-content:space-between;width:100%">
+                    <span class="name">${n.title} ${n.is_pinned ? '<span class="badge badge-yellow">PINNED</span>' : ''}</span>
+                    <button class="btn btn-danger btn-sm" onclick="deleteNews(${n.id})">DELETE</button>
+                </div>
+                <span style="color:var(--text-dim);font-size:12px">${n.content.substring(0, 100)}${n.content.length > 100 ? '...' : ''}</span>
+                <span style="color:var(--text-dim);font-size:11px">${n.created_at || ''}</span>
+            </div>`;
+        });
+    });
+}
+
+function createNews() {
+    const title = document.getElementById('news-title').value.trim();
+    const content = document.getElementById('news-content').value.trim();
+    const image_url = document.getElementById('news-image').value.trim();
+    const is_pinned = document.getElementById('news-pinned').value === '1';
+    if (!title || !content) { alert('Title and content required'); return; }
+    api('POST', '/api/news', { title, content, image_url, is_pinned }).then(() => {
+        document.getElementById('news-title').value = '';
+        document.getElementById('news-content').value = '';
+        document.getElementById('news-image').value = '';
+        loadNewsAdmin();
+    });
+}
+
+function deleteNews(id) {
+    if (!confirm('Delete this news post?')) return;
+    api('DELETE', '/api/news/' + id).then(() => loadNewsAdmin());
+}
+
+/* Categories Admin */
+function loadCategoriesAdmin() {
+    api('GET', '/api/categories').then(data => {
+        const list = document.getElementById('categories-list');
+        list.innerHTML = '';
+        if (!data) return;
+        data.forEach(c => {
+            list.innerHTML += `<div class="archive-item" style="justify-content:space-between">
+                <span class="name">${c.icon} ${c.name}</span>
+                <span style="color:var(--text-dim);font-size:12px">ID: ${c.id}</span>
+            </div>`;
+        });
+    });
+}
+
+function createCategory() {
+    const name = document.getElementById('new-cat-name').value.trim();
+    const icon = document.getElementById('new-cat-icon').value.trim();
+    if (!name) { alert('Name required'); return; }
+    api('POST', '/api/admin/categories', { name, icon }).then(() => {
+        document.getElementById('new-cat-name').value = '';
+        document.getElementById('new-cat-icon').value = '';
+        loadCategoriesAdmin();
+    });
+}
+
+/* Featured Admin */
+function loadFeaturedAdmin() {
+    api('GET', '/api/games/featured').then(data => {
+        const list = document.getElementById('featured-list');
+        list.innerHTML = '';
+        if (!data || data.length === 0) {
+            list.innerHTML = '<p style="color:var(--text-dim)">No featured games</p>';
+            return;
+        }
+        data.forEach(g => {
+            list.innerHTML += `<div class="archive-item" style="justify-content:space-between">
+                <span class="name">${g.name}</span>
+                <button class="btn btn-danger btn-sm" onclick="removeFeatured(${g.id})">REMOVE</button>
+            </div>`;
+        });
+    });
+    api('GET', '/api/games').then(data => {
+        const sel = document.getElementById('featured-game-select');
+        sel.innerHTML = '';
+        if (data) data.forEach(g => {
+            sel.innerHTML += `<option value="${g.id}">${g.name}</option>`;
+        });
+    });
+}
+
+function setFeatured() {
+    const gameId = document.getElementById('featured-game-select').value;
+    api('POST', '/api/games/' + gameId + '/featured', { featured: true }).then(() => loadFeaturedAdmin());
+}
+
+function removeFeatured(gameId) {
+    api('POST', '/api/games/' + gameId + '/featured', { featured: false }).then(() => loadFeaturedAdmin());
+}
+
+/* Mods Admin */
+function loadModsAdmin() {
+    api('GET', '/api/games').then(games => {
+        if (!games || games.length === 0) return;
+        const list = document.getElementById('mods-list');
+        list.innerHTML = '';
+        let loaded = 0;
+        games.forEach(g => {
+            api('GET', '/api/games/' + g.id + '/mods').then(mods => {
+                if (mods && mods.length > 0) {
+                    mods.forEach(m => {
+                        list.innerHTML += `<div class="archive-item" style="justify-content:space-between">
+                            <div>
+                                <span class="name">${m.name}</span>
+                                <span style="color:var(--text-dim);font-size:12px;margin-left:8px">by ${m.username || 'unknown'} | ${m.downloads} downloads</span>
+                            </div>
+                            <button class="btn btn-danger btn-sm" onclick="deleteMod(${m.id})">DELETE</button>
+                        </div>`;
+                    });
+                }
+                loaded++;
+                if (loaded === games.length && list.innerHTML === '') {
+                    list.innerHTML = '<p style="color:var(--text-dim)">No mods uploaded</p>';
+                }
+            });
+        });
+    });
+}
+
+function deleteMod(id) {
+    if (!confirm('Delete this mod?')) return;
+    api('DELETE', '/api/mods/' + id).then(() => loadModsAdmin());
+}
+
+/* Servers Admin */
+function loadServersAdmin() {
+    api('GET', '/api/games').then(games => {
+        if (!games || games.length === 0) return;
+        const sel = document.getElementById('server-game-select');
+        sel.innerHTML = '';
+        games.forEach(g => { sel.innerHTML += `<option value="${g.id}">${g.name}</option>`; });
+    });
+    api('GET', '/api/games').then(games => {
+        const list = document.getElementById('servers-list');
+        list.innerHTML = '';
+        if (!games) return;
+        let loaded = 0;
+        games.forEach(g => {
+            api('GET', '/api/games/' + g.id + '/servers').then(servers => {
+                if (servers && servers.length > 0) {
+                    servers.forEach(s => {
+                        const statusColor = s.current_players > 0 ? 'var(--accent)' : 'var(--text-dim)';
+                        list.innerHTML += `<div class="archive-item" style="justify-content:space-between">
+                            <div>
+                                <span class="name">${s.name}</span>
+                                <span style="color:var(--text-dim);font-size:12px;margin-left:8px">${s.ip}:${s.port} | ${s.current_players}/${s.max_players}</span>
+                            </div>
+                            <button class="btn btn-danger btn-sm" onclick="deleteServer(${s.id})">DELETE</button>
+                        </div>`;
+                    });
+                }
+                loaded++;
+                if (loaded === games.length && list.innerHTML === '') {
+                    list.innerHTML = '<p style="color:var(--text-dim)">No servers configured</p>';
+                }
+            });
+        });
+    });
+}
+
+function addServer() {
+    const gameId = document.getElementById('server-game-select').value;
+    const name = document.getElementById('server-name').value.trim();
+    const ip = document.getElementById('server-ip').value.trim();
+    const port = parseInt(document.getElementById('server-port').value);
+    const max = parseInt(document.getElementById('server-max').value) || 32;
+    if (!name || !ip || !port) { alert('Fill all fields'); return; }
+    api('POST', '/api/games/' + gameId + '/servers', { name, ip, port, max_players: max }).then(() => {
+        document.getElementById('server-name').value = '';
+        document.getElementById('server-ip').value = '';
+        document.getElementById('server-port').value = '';
+        loadServersAdmin();
+    });
+}
+
+function deleteServer(id) {
+    if (!confirm('Delete this server?')) return;
+    api('DELETE', '/api/servers/' + id).then(() => loadServersAdmin());
+}
+
 function logout() {
     authToken = '';
     localStorage.removeItem('mk_token');
@@ -84,6 +275,11 @@ function showTab(tab, event) {
         case 'archives': loadArchives(); break;
         case 'admins': loadAdmins(); break;
         case 'users': loadUsers(); break;
+        case 'news': loadNewsAdmin(); break;
+        case 'categories': loadCategoriesAdmin(); break;
+        case 'featured': loadFeaturedAdmin(); break;
+        case 'mods': loadModsAdmin(); break;
+        case 'servers': loadServersAdmin(); break;
         case 'config': loadConfig(); break;
         case 'notifications': loadNotifications(); break;
     }

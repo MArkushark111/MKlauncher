@@ -9,6 +9,7 @@
 #include <QProcess>
 #include <QJsonDocument>
 #include <QJsonObject>
+#include <QJsonArray>
 #include <QFile>
 #include <QDir>
 #include <QFileInfo>
@@ -21,6 +22,8 @@
 #include <QTabWidget>
 #include <QFormLayout>
 #include <QScrollArea>
+#include <QTextBrowser>
+#include <QDateTime>
 
 LauncherWindow::LauncherWindow(QWidget *parent) : QMainWindow(parent) {
     setWindowTitle("MKLAUNCHER");
@@ -40,10 +43,14 @@ LauncherWindow::LauncherWindow(QWidget *parent) : QMainWindow(parent) {
 
     setupConnectPage();
     setupMainPage();
+    setupNewsTab();
+    setupChatTab();
     setupSettingsPage();
     m_stack->addWidget(m_connectPage);
     m_stack->addWidget(m_mainPage);
     m_stack->addWidget(m_settingsPage);
+    m_stack->addWidget(m_newsPage);
+    m_stack->addWidget(m_chatPage);
 
     if (!m_settings.firstRun() && !m_settings.serverUrl().isEmpty()) {
         m_urlInput->setText(m_settings.serverUrl());
@@ -56,6 +63,26 @@ LauncherWindow::LauncherWindow(QWidget *parent) : QMainWindow(parent) {
     m_updateTimer = new QTimer(this);
     connect(m_updateTimer, &QTimer::timeout, this, &LauncherWindow::checkLauncherUpdates);
     m_updateTimer->start(3600000);
+
+    m_playtimeTimer = new QTimer(this);
+    m_playtimeTimer->setInterval(60000);
+    connect(m_playtimeTimer, &QTimer::timeout, this, [this]() {
+        if (m_currentGameId > 0 && !m_serverUrl.isEmpty()) {
+            QJsonObject obj;
+            obj["game_id"] = m_currentGameId;
+            obj["seconds"] = 60;
+            QNetworkRequest request(QUrl(m_serverUrl + "/api/playtime"));
+            request.setHeader(QNetworkRequest::ContentTypeHeader, "application/json");
+            request.setRawHeader("Authorization", "Bearer " + m_authToken.toUtf8());
+            request.setTransferTimeout(10000);
+            m_reviewManager->post(request, QJsonDocument(obj).toJson());
+        }
+    });
+
+    m_lastChatId = 0;
+    m_chatPollTimer = new QTimer(this);
+    m_chatPollTimer->setInterval(3000);
+    connect(m_chatPollTimer, &QTimer::timeout, this, &LauncherWindow::pollChat);
 
     connect(m_authManager, &QNetworkAccessManager::finished, this, &LauncherWindow::onAuthResult);
     connect(m_downloadManager, &DownloadManager::downloadProgress, this, &LauncherWindow::onDownloadProgress);
@@ -191,6 +218,18 @@ void LauncherWindow::setupMainPage() {
             this, &LauncherWindow::onFilterChanged);
     headerLayout->addWidget(m_filterCombo);
 
+    m_categoryFilter = new QComboBox();
+    m_categoryFilter->setFixedWidth(140);
+    m_categoryFilter->addItem("All Categories", -1);
+    m_categoryFilter->setStyleSheet(
+        "background-color: #1a1a1a; color: #e0e0e0; border: 1px solid #2a2a2a;"
+        "border-radius: 4px; padding: 8px; font-size: 12px;");
+    connect(m_categoryFilter, QOverload<int>::of(&QComboBox::currentIndexChanged), this, [this](int index) {
+        int catId = m_categoryFilter->currentData().toInt();
+        filterByCategory(catId);
+    });
+    headerLayout->addWidget(m_categoryFilter);
+
     headerLayout->addStretch();
 
     m_progressBar = new QProgressBar();
@@ -203,6 +242,23 @@ void LauncherWindow::setupMainPage() {
     headerLayout->addWidget(m_progressLabel);
 
     headerLayout->addSpacing(12);
+
+    auto *newsBtn = new QPushButton("NEWS");
+    newsBtn->setCursor(Qt::PointingHandCursor);
+    connect(newsBtn, &QPushButton::clicked, [this]() {
+        m_stack->setCurrentWidget(m_newsPage);
+        loadNews();
+    });
+    headerLayout->addWidget(newsBtn);
+
+    auto *chatBtn = new QPushButton("CHAT");
+    chatBtn->setCursor(Qt::PointingHandCursor);
+    connect(chatBtn, &QPushButton::clicked, [this]() {
+        m_stack->setCurrentWidget(m_chatPage);
+        loadChatMessages();
+        m_chatPollTimer->start();
+    });
+    headerLayout->addWidget(chatBtn);
 
     auto *refreshBtn = new QPushButton("REFRESH");
     refreshBtn->setCursor(Qt::PointingHandCursor);
@@ -235,6 +291,10 @@ void LauncherWindow::setupMainPage() {
     });
     connect(m_gameGrid, &GameGrid::gameDetails, this, &LauncherWindow::onGameDetails);
     layout->addWidget(m_gameGrid);
+
+    loadFeatured();
+    loadRecentlyPlayed();
+    loadCategories();
 }
 
 void LauncherWindow::setupSettingsPage() {
@@ -650,6 +710,445 @@ void LauncherWindow::setupSettingsPage() {
     outerLayout->addWidget(tabs);
 }
 
+void LauncherWindow::setupNewsTab() {
+    m_newsPage = new QWidget();
+    m_newsPage->setStyleSheet("background-color: #0a0a0a;");
+
+    auto *outerLayout = new QVBoxLayout(m_newsPage);
+    outerLayout->setContentsMargins(0, 0, 0, 0);
+    outerLayout->setSpacing(0);
+
+    auto *topBar = new QWidget();
+    topBar->setFixedHeight(60);
+    topBar->setStyleSheet("background-color: #111111; border-bottom: 1px solid #2a2a2a;");
+    auto *topBarLayout = new QHBoxLayout(topBar);
+    topBarLayout->setContentsMargins(24, 0, 24, 0);
+
+    auto *backBtn = new QPushButton("BACK");
+    backBtn->setCursor(Qt::PointingHandCursor);
+    connect(backBtn, &QPushButton::clicked, [this]() {
+        m_stack->setCurrentIndex(1);
+    });
+    topBarLayout->addWidget(backBtn);
+    topBarLayout->addSpacing(16);
+
+    auto *newsTitle = new QLabel("NEWS & UPDATES");
+    newsTitle->setStyleSheet("font-size: 18px; font-weight: bold; color: #00ff88; background: transparent; letter-spacing: 3px;");
+    topBarLayout->addWidget(newsTitle);
+    topBarLayout->addStretch();
+    outerLayout->addWidget(topBar);
+
+    auto *scroll = new QScrollArea();
+    scroll->setWidgetResizable(true);
+    scroll->setFrameShape(QFrame::NoFrame);
+    scroll->setStyleSheet("background: transparent; border: none;");
+
+    auto *content = new QWidget();
+    content->setStyleSheet("background: transparent;");
+    auto *contentLayout = new QVBoxLayout(content);
+    contentLayout->setContentsMargins(32, 24, 32, 24);
+    contentLayout->setSpacing(16);
+
+    auto *loadingLabel = new QLabel("Loading news...");
+    loadingLabel->setStyleSheet("color: #888888; font-size: 13px; background: transparent; padding: 40px; text-align: center;");
+    loadingLabel->setAlignment(Qt::AlignCenter);
+    contentLayout->addWidget(loadingLabel);
+
+    contentLayout->addStretch();
+    scroll->setWidget(content);
+    outerLayout->addWidget(scroll);
+}
+
+void LauncherWindow::setupChatTab() {
+    m_chatPage = new QWidget();
+    m_chatPage->setStyleSheet("background-color: #0a0a0a;");
+
+    auto *outerLayout = new QVBoxLayout(m_chatPage);
+    outerLayout->setContentsMargins(0, 0, 0, 0);
+    outerLayout->setSpacing(0);
+
+    auto *topBar = new QWidget();
+    topBar->setFixedHeight(60);
+    topBar->setStyleSheet("background-color: #111111; border-bottom: 1px solid #2a2a2a;");
+    auto *topBarLayout = new QHBoxLayout(topBar);
+    topBarLayout->setContentsMargins(24, 0, 24, 0);
+
+    auto *backBtn = new QPushButton("BACK");
+    backBtn->setCursor(Qt::PointingHandCursor);
+    connect(backBtn, &QPushButton::clicked, [this]() {
+        m_chatPollTimer->stop();
+        m_stack->setCurrentIndex(1);
+    });
+    topBarLayout->addWidget(backBtn);
+    topBarLayout->addSpacing(16);
+
+    auto *chatTitle = new QLabel("CHAT");
+    chatTitle->setStyleSheet("font-size: 18px; font-weight: bold; color: #00ff88; background: transparent; letter-spacing: 3px;");
+    topBarLayout->addWidget(chatTitle);
+
+    topBarLayout->addStretch();
+
+    m_chatChannel = new QComboBox();
+    m_chatChannel->setFixedWidth(160);
+    m_chatChannel->addItem("Global", "global");
+    m_chatChannel->setStyleSheet(
+        "background-color: #1a1a1a; color: #e0e0e0; border: 1px solid #2a2a2a;"
+        "border-radius: 4px; padding: 8px; font-size: 12px;");
+    connect(m_chatChannel, QOverload<int>::of(&QComboBox::currentIndexChanged), this, [this](int) {
+        m_lastChatId = 0;
+        m_chatMessages->clear();
+        loadChatMessages();
+    });
+    topBarLayout->addWidget(m_chatChannel);
+    outerLayout->addWidget(topBar);
+
+    m_chatMessages = new QTextEdit();
+    m_chatMessages->setReadOnly(true);
+    m_chatMessages->setStyleSheet(
+        "QTextEdit { background-color: #0a0a0a; color: #e0e0e0; border: none; "
+        "font-size: 13px; padding: 16px; selection-background-color: #00ff88; }");
+    outerLayout->addWidget(m_chatMessages);
+
+    auto *inputWidget = new QWidget();
+    inputWidget->setFixedHeight(56);
+    inputWidget->setStyleSheet("background-color: #111111; border-top: 1px solid #2a2a2a;");
+    auto *inputLayout = new QHBoxLayout(inputWidget);
+    inputLayout->setContentsMargins(24, 8, 24, 8);
+    inputLayout->setSpacing(12);
+
+    m_chatInput = new QLineEdit();
+    m_chatInput->setPlaceholderText("Type a message...");
+    m_chatInput->setStyleSheet(
+        "background-color: #1a1a1a; color: #e0e0e0; border: 1px solid #2a2a2a;"
+        "border-radius: 4px; padding: 8px 12px; font-size: 13px;");
+    connect(m_chatInput, &QLineEdit::returnPressed, this, &LauncherWindow::sendChatMessage);
+    inputLayout->addWidget(m_chatInput);
+
+    auto *sendBtn = new QPushButton("SEND");
+    sendBtn->setCursor(Qt::PointingHandCursor);
+    sendBtn->setStyleSheet(
+        "QPushButton { background-color: #00ff88; color: #000000; border: none; "
+        "border-radius: 4px; padding: 8px 24px; font-size: 13px; font-weight: bold; }"
+        "QPushButton:hover { background-color: #00cc6a; }");
+    connect(sendBtn, &QPushButton::clicked, this, &LauncherWindow::sendChatMessage);
+    inputLayout->addWidget(sendBtn);
+
+    outerLayout->addWidget(inputWidget);
+}
+
+void LauncherWindow::loadNews() {
+    if (m_serverUrl.isEmpty()) return;
+
+    QNetworkRequest request(QUrl(m_serverUrl + "/api/news"));
+    request.setRawHeader("Authorization", "Bearer " + m_authToken.toUtf8());
+    request.setTransferTimeout(10000);
+    QNetworkReply *reply = m_reviewManager->get(request);
+    connect(reply, &QNetworkReply::finished, this, [this, reply]() {
+        reply->deleteLater();
+        if (reply->error() != QNetworkReply::NoError) return;
+
+        QByteArray data = reply->readAll();
+        QJsonDocument doc = QJsonDocument::fromJson(data);
+        QJsonObject obj = doc.object();
+        QJsonArray newsArray = obj["news"].toArray();
+
+        if (!m_newsPage) return;
+        auto *scroll = m_newsPage->findChild<QScrollArea*>();
+        if (!scroll) return;
+        auto *content = scroll->widget();
+        if (!content) return;
+
+        auto *contentLayout = content->layout();
+        if (!contentLayout) return;
+
+        QLayoutItem *item;
+        while ((item = contentLayout->takeAt(0)) != nullptr) {
+            if (item->widget()) item->widget()->deleteLater();
+            delete item;
+        }
+
+        if (newsArray.isEmpty()) {
+            auto *emptyLabel = new QLabel("No news available yet.");
+            emptyLabel->setAlignment(Qt::AlignCenter);
+            emptyLabel->setStyleSheet("color: #555555; font-size: 14px; padding: 60px; background: transparent;");
+            contentLayout->addWidget(emptyLabel);
+            contentLayout->addStretch();
+            return;
+        }
+
+        for (const QJsonValue &val : newsArray) {
+            QJsonObject news = val.toObject();
+
+            auto *card = new QWidget();
+            card->setStyleSheet(
+                "background-color: #1a1a1a; border: 1px solid #2a2a2a; border-radius: 8px;");
+            auto *cardLayout = new QVBoxLayout(card);
+            cardLayout->setContentsMargins(20, 16, 20, 16);
+            cardLayout->setSpacing(8);
+
+            auto *titleLabel = new QLabel(news["title"].toString());
+            titleLabel->setStyleSheet("color: #e0e0e0; font-size: 16px; font-weight: bold; background: transparent;");
+            cardLayout->addWidget(titleLabel);
+
+            QString dateStr = news["date"].toString();
+            if (dateStr.isEmpty()) dateStr = news["created_at"].toString();
+            auto *dateLabel = new QLabel(dateStr);
+            dateLabel->setStyleSheet("color: #888888; font-size: 11px; background: transparent;");
+            cardLayout->addWidget(dateLabel);
+
+            QString contentStr = news["content"].toString();
+            if (contentStr.length() > 200) contentStr = contentStr.left(200) + "...";
+            auto *contentLabel = new QLabel(contentStr);
+            contentLabel->setStyleSheet("color: #cccccc; font-size: 13px; background: transparent; line-height: 1.4;");
+            contentLabel->setWordWrap(true);
+            cardLayout->addWidget(contentLabel);
+
+            contentLayout->addWidget(card);
+        }
+        contentLayout->addStretch();
+    });
+}
+
+void LauncherWindow::loadCategories() {
+    if (m_serverUrl.isEmpty()) return;
+
+    QNetworkRequest request(QUrl(m_serverUrl + "/api/categories"));
+    request.setRawHeader("Authorization", "Bearer " + m_authToken.toUtf8());
+    request.setTransferTimeout(10000);
+    QNetworkReply *reply = m_reviewManager->get(request);
+    connect(reply, &QNetworkReply::finished, this, [this, reply]() {
+        reply->deleteLater();
+        if (reply->error() != QNetworkReply::NoError) return;
+
+        QByteArray data = reply->readAll();
+        QJsonDocument doc = QJsonDocument::fromJson(data);
+        QJsonObject obj = doc.object();
+        QJsonArray categories = obj["categories"].toArray();
+
+        m_categoryFilter->blockSignals(true);
+        m_categoryFilter->clear();
+        m_categoryFilter->addItem("All Categories", -1);
+        for (const QJsonValue &val : categories) {
+            QJsonObject cat = val.toObject();
+            m_categoryFilter->addItem(cat["name"].toString(), cat["id"].toInt());
+        }
+        m_categoryFilter->blockSignals(false);
+    });
+}
+
+void LauncherWindow::filterByCategory(int categoryId) {
+    if (categoryId == -1) {
+        m_gameGrid->filterByCategory("");
+    } else {
+        QString catName;
+        for (int i = 0; i < m_categoryFilter->count(); i++) {
+            if (m_categoryFilter->itemData(i).toInt() == categoryId) {
+                catName = m_categoryFilter->itemText(i);
+                break;
+            }
+        }
+        m_gameGrid->filterByCategory(catName);
+    }
+}
+
+void LauncherWindow::loadFeatured() {
+    if (m_serverUrl.isEmpty()) return;
+
+    QNetworkRequest request(QUrl(m_serverUrl + "/api/games/featured"));
+    request.setRawHeader("Authorization", "Bearer " + m_authToken.toUtf8());
+    request.setTransferTimeout(10000);
+    QNetworkReply *reply = m_reviewManager->get(request);
+    connect(reply, &QNetworkReply::finished, this, [this, reply]() {
+        reply->deleteLater();
+        if (reply->error() != QNetworkReply::NoError) return;
+
+        QByteArray data = reply->readAll();
+        QJsonDocument doc = QJsonDocument::fromJson(data);
+        QJsonObject obj = doc.object();
+        QJsonArray featured = obj["games"].toArray();
+
+        if (featured.isEmpty()) return;
+
+        qDebug() << "[FEATURED]" << featured.size() << "featured games loaded";
+    });
+}
+
+void LauncherWindow::loadRecentlyPlayed() {
+    if (m_serverUrl.isEmpty()) return;
+
+    QNetworkRequest request(QUrl(m_serverUrl + "/api/recently-played"));
+    request.setRawHeader("Authorization", "Bearer " + m_authToken.toUtf8());
+    request.setTransferTimeout(10000);
+    QNetworkReply *reply = m_reviewManager->get(request);
+    connect(reply, &QNetworkReply::finished, this, [this, reply]() {
+        reply->deleteLater();
+        if (reply->error() != QNetworkReply::NoError) return;
+
+        QByteArray data = reply->readAll();
+        QJsonDocument doc = QJsonDocument::fromJson(data);
+        QJsonObject obj = doc.object();
+        QJsonArray recent = obj["games"].toArray();
+
+        if (recent.isEmpty()) return;
+
+        qDebug() << "[RECENT]" << recent.size() << "recently played games loaded";
+    });
+}
+
+void LauncherWindow::startPlaytimeTracking(int gameId) {
+    m_currentGameId = gameId;
+    m_playtimeTimer->start();
+}
+
+void LauncherWindow::stopPlaytimeTracking() {
+    m_playtimeTimer->stop();
+    m_currentGameId = 0;
+}
+
+void LauncherWindow::loadChatMessages() {
+    if (m_serverUrl.isEmpty()) return;
+
+    QString channel = m_chatChannel->currentData().toString();
+    if (channel.isEmpty()) channel = "global";
+
+    QString url = m_serverUrl + "/api/chat?channel=" + channel;
+    if (m_lastChatId > 0) {
+        url += "&before_id=" + QString::number(m_lastChatId);
+    }
+
+    QNetworkRequest request(QUrl(url));
+    request.setRawHeader("Authorization", "Bearer " + m_authToken.toUtf8());
+    request.setTransferTimeout(10000);
+    QNetworkReply *reply = m_reviewManager->get(request);
+    connect(reply, &QNetworkReply::finished, this, [this, reply]() {
+        reply->deleteLater();
+        if (reply->error() != QNetworkReply::NoError) return;
+
+        QByteArray data = reply->readAll();
+        QJsonDocument doc = QJsonDocument::fromJson(data);
+        QJsonObject obj = doc.object();
+        QJsonArray messages = obj["messages"].toArray();
+
+        if (!m_chatMessages) return;
+
+        for (const QJsonValue &val : messages) {
+            QJsonObject msg = val.toObject();
+            int id = msg["id"].toInt();
+            if (id > m_lastChatId) m_lastChatId = id;
+
+            QString username = msg["username"].toString();
+            QString text = msg["message"].toString();
+            QString timestamp = msg["timestamp"].toString();
+            if (timestamp.isEmpty()) timestamp = msg["created_at"].toString();
+
+            QString displayTime;
+            if (!timestamp.isEmpty()) {
+                QDateTime dt = QDateTime::fromString(timestamp, Qt::ISODate);
+                if (dt.isValid()) displayTime = dt.toString("MMM d, h:mm AP");
+                else displayTime = timestamp;
+            }
+
+            QString formatted;
+            if (!displayTime.isEmpty()) {
+                formatted = QString("<span style='color:#888888; font-size:11px;'>[%1]</span> "
+                                   "<span style='color:#00ff88; font-weight:bold;'>%2</span>: %3")
+                    .arg(displayTime, username.toHtmlEscaped(), text.toHtmlEscaped());
+            } else {
+                formatted = QString("<span style='color:#00ff88; font-weight:bold;'>%1</span>: %2")
+                    .append(text.toHtmlEscaped());
+            }
+            m_chatMessages->append(formatted);
+        }
+
+        QTextCursor cursor = m_chatMessages->textCursor();
+        cursor.movePosition(QTextCursor::End);
+        m_chatMessages->setTextCursor(cursor);
+    });
+}
+
+void LauncherWindow::pollChat() {
+    loadChatMessages();
+}
+
+void LauncherWindow::sendChatMessage() {
+    if (!m_chatInput || m_chatInput->text().trimmed().isEmpty()) return;
+    if (m_serverUrl.isEmpty()) return;
+
+    QString message = m_chatInput->text().trimmed();
+    QString channel = m_chatChannel->currentData().toString();
+    if (channel.isEmpty()) channel = "global";
+
+    m_chatInput->clear();
+
+    QJsonObject obj;
+    obj["message"] = message;
+    obj["channel"] = channel;
+    QNetworkRequest request(QUrl(m_serverUrl + "/api/chat"));
+    request.setHeader(QNetworkRequest::ContentTypeHeader, "application/json");
+    request.setRawHeader("Authorization", "Bearer " + m_authToken.toUtf8());
+    request.setTransferTimeout(10000);
+    m_reviewManager->post(request, QJsonDocument(obj).toJson());
+
+    QTimer::singleShot(500, this, &LauncherWindow::loadChatMessages);
+}
+
+void LauncherWindow::toggleWishlist(int gameId) {
+    if (m_serverUrl.isEmpty()) return;
+
+    QJsonObject obj;
+    obj["game_id"] = gameId;
+    QNetworkRequest request(QUrl(m_serverUrl + "/api/wishlist/toggle"));
+    request.setHeader(QNetworkRequest::ContentTypeHeader, "application/json");
+    request.setRawHeader("Authorization", "Bearer " + m_authToken.toUtf8());
+    request.setTransferTimeout(10000);
+    QNetworkReply *reply = m_reviewManager->post(request, QJsonDocument(obj).toJson());
+    connect(reply, &QNetworkReply::finished, this, [this, reply]() {
+        reply->deleteLater();
+        if (reply->error() != QNetworkReply::NoError) return;
+        QByteArray data = reply->readAll();
+        QJsonDocument doc = QJsonDocument::fromJson(data);
+        QJsonObject obj = doc.object();
+        bool added = obj["added"].toBool();
+        showNotification("Wishlist", added ? "Added to wishlist" : "Removed from wishlist");
+    });
+}
+
+void LauncherWindow::loadWishlist() {
+    if (m_serverUrl.isEmpty()) return;
+
+    QNetworkRequest request(QUrl(m_serverUrl + "/api/wishlist"));
+    request.setRawHeader("Authorization", "Bearer " + m_authToken.toUtf8());
+    request.setTransferTimeout(10000);
+    m_reviewManager->get(request);
+}
+
+void LauncherWindow::loadLeaderboard(int gameId) {
+    if (m_serverUrl.isEmpty()) return;
+
+    QNetworkRequest request(QUrl(m_serverUrl + "/api/games/" + QString::number(gameId) + "/leaderboard?limit=50"));
+    request.setRawHeader("Authorization", "Bearer " + m_authToken.toUtf8());
+    request.setTransferTimeout(10000);
+    m_reviewManager->get(request);
+}
+
+void LauncherWindow::loadAchievements(int gameId) {
+    if (m_serverUrl.isEmpty()) return;
+
+    QNetworkRequest request(QUrl(m_serverUrl + "/api/games/" + QString::number(gameId) + "/achievements"));
+    request.setRawHeader("Authorization", "Bearer " + m_authToken.toUtf8());
+    request.setTransferTimeout(10000);
+    m_reviewManager->get(request);
+}
+
+void LauncherWindow::loadScreenshots(int gameId) {
+    if (m_serverUrl.isEmpty()) return;
+
+    QNetworkRequest request(QUrl(m_serverUrl + "/api/games/" + QString::number(gameId) + "/screenshots"));
+    request.setRawHeader("Authorization", "Bearer " + m_authToken.toUtf8());
+    request.setTransferTimeout(10000);
+    m_reviewManager->get(request);
+}
+
 void LauncherWindow::onConnectClicked() {
     QString url = m_urlInput->text().trimmed();
 
@@ -795,6 +1294,7 @@ void LauncherWindow::refreshGames() {
 }
 
 void LauncherWindow::onGamePlay(int gameId, const QString &name, const QString &exePath, const QString &installPath) {
+    startPlaytimeTracking(gameId);
     launchGame(exePath, installPath);
     m_localDB->updateLastPlayed(gameId);
 }
@@ -1198,9 +1698,459 @@ void LauncherWindow::showGameDetail(const ServerGame &game) {
         btnLayout->addWidget(installBtn);
     }
 
+    auto *wishlistBtn = new QPushButton("WISHLIST");
+    wishlistBtn->setObjectName("wishlistBtn");
+    wishlistBtn->setCursor(Qt::PointingHandCursor);
+    wishlistBtn->setStyleSheet(
+        "QPushButton#wishlistBtn { background-color: transparent; color: #ff4488; border: 1px solid #ff4488; "
+        "border-radius: 6px; font-size: 13px; padding: 14px 24px; font-weight: bold; }"
+        "QPushButton#wishlistBtn:hover { background-color: #ff4488; color: #000000; }");
+    connect(wishlistBtn, &QPushButton::clicked, this, [this, game]() {
+        toggleWishlist(game.id);
+    });
+    btnLayout->addWidget(wishlistBtn);
+
     btnLayout->addStretch();
     layout->addWidget(btnWidget);
 
+    // Screenshots section
+    auto *screenshotsTitle = new QLabel("SCREENSHOTS");
+    screenshotsTitle->setStyleSheet("color: #00ff88; font-size: 16px; font-weight: bold; letter-spacing: 2px; background: transparent; margin-top: 16px;");
+    layout->addWidget(screenshotsTitle);
+
+    auto *screenshotsScroll = new QScrollArea();
+    screenshotsScroll->setWidgetResizable(true);
+    screenshotsScroll->setFrameShape(QFrame::NoFrame);
+    screenshotsScroll->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOn);
+    screenshotsScroll->setVerticalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+    screenshotsScroll->setFixedHeight(220);
+    screenshotsScroll->setStyleSheet("background: transparent; border: none;");
+
+    auto *screenshotsContainer = new QWidget();
+    screenshotsContainer->setStyleSheet("background: transparent;");
+    auto *screenshotsLayout = new QHBoxLayout(screenshotsContainer);
+    screenshotsLayout->setContentsMargins(0, 0, 0, 0);
+    screenshotsLayout->setSpacing(12);
+
+    auto *screenshotsLoading = new QLabel("Loading screenshots...");
+    screenshotsLoading->setStyleSheet("color: #888888; font-size: 12px; background: transparent;");
+    screenshotsLayout->addWidget(screenshotsLoading);
+
+    screenshotsScroll->setWidget(screenshotsContainer);
+    layout->addWidget(screenshotsScroll);
+
+    QNetworkRequest screenshotsReq(QUrl(m_serverUrl + "/api/games/" + QString::number(game.id) + "/screenshots"));
+    screenshotsReq.setRawHeader("Authorization", "Bearer " + m_authToken.toUtf8());
+    screenshotsReq.setTransferTimeout(10000);
+    QNetworkReply *screenshotsReply = m_reviewManager->get(screenshotsReq);
+    connect(screenshotsReply, &QNetworkReply::finished, this, [this, screenshotsReply, screenshotsContainer, screenshotsLayout, screenshotsLoading]() {
+        screenshotsReply->deleteLater();
+        delete screenshotsLoading;
+
+        QLayoutItem *item;
+        while ((item = screenshotsLayout->takeAt(0)) != nullptr) {
+            if (item->widget()) item->widget()->deleteLater();
+            delete item;
+        }
+
+        QByteArray data = screenshotsReply->readAll();
+        QJsonDocument doc = QJsonDocument::fromJson(data);
+        QJsonObject obj = doc.object();
+        QJsonArray screenshots = obj["screenshots"].toArray();
+
+        if (screenshots.isEmpty()) {
+            auto *emptyLbl = new QLabel("No screenshots available.");
+            emptyLbl->setStyleSheet("color: #555555; font-size: 12px; background: transparent; padding: 40px;");
+            screenshotsLayout->addWidget(emptyLbl);
+            screenshotsLayout->addStretch();
+            return;
+        }
+
+        for (const QJsonValue &val : screenshots) {
+            QJsonObject ss = val.toObject();
+            QString url = ss["url"].toString();
+            if (url.isEmpty()) url = ss["image"].toString();
+            if (url.isEmpty()) continue;
+
+            auto *imgLabel = new QLabel();
+            imgLabel->setFixedSize(320, 180);
+            imgLabel->setStyleSheet("background-color: #1a1a1a; border: 1px solid #2a2a2a; border-radius: 8px;");
+            imgLabel->setAlignment(Qt::AlignCenter);
+            imgLabel->setText("Loading...");
+
+            QString fullUrl = url.startsWith("http") ? url : m_serverUrl + "/" + url;
+            QNetworkRequest imgReq(QUrl(fullUrl));
+            imgReq.setTransferTimeout(10000);
+            QNetworkReply *imgReply = m_reviewManager->get(imgReq);
+            connect(imgReply, &QNetworkReply::finished, this, [imgLabel, imgReply]() {
+                imgReply->deleteLater();
+                if (imgReply->error() != QNetworkReply::NoError) return;
+                QPixmap pixmap;
+                pixmap.loadFromData(imgReply->readAll());
+                if (!pixmap.isNull()) {
+                    imgLabel->setPixmap(pixmap.scaled(320, 180, Qt::KeepAspectRatioByExpanding, Qt::SmoothTransformation));
+                    imgLabel->setText(QString());
+                }
+            });
+            screenshotsLayout->addWidget(imgLabel);
+        }
+        screenshotsLayout->addStretch();
+    });
+
+    // Achievements section
+    auto *achievementsTitle = new QLabel("ACHIEVEMENTS");
+    achievementsTitle->setStyleSheet("color: #00ff88; font-size: 16px; font-weight: bold; letter-spacing: 2px; background: transparent; margin-top: 16px;");
+    layout->addWidget(achievementsTitle);
+
+    auto *achievementsContainer = new QWidget();
+    achievementsContainer->setStyleSheet("background: transparent;");
+    auto *achievementsLayout = new QVBoxLayout(achievementsContainer);
+    achievementsLayout->setContentsMargins(0, 0, 0, 0);
+    achievementsLayout->setSpacing(8);
+
+    auto *achievementsLoading = new QLabel("Loading achievements...");
+    achievementsLoading->setStyleSheet("color: #888888; font-size: 12px; background: transparent;");
+    achievementsLayout->addWidget(achievementsLoading);
+    layout->addWidget(achievementsContainer);
+
+    QNetworkRequest achievementsReq(QUrl(m_serverUrl + "/api/games/" + QString::number(game.id) + "/achievements"));
+    achievementsReq.setRawHeader("Authorization", "Bearer " + m_authToken.toUtf8());
+    achievementsReq.setTransferTimeout(10000);
+    QNetworkReply *achievementsReply = m_reviewManager->get(achievementsReq);
+    connect(achievementsReply, &QNetworkReply::finished, this, [this, achievementsReply, achievementsContainer, achievementsLayout, achievementsLoading]() {
+        achievementsReply->deleteLater();
+        delete achievementsLoading;
+
+        QLayoutItem *item;
+        while ((item = achievementsLayout->takeAt(0)) != nullptr) {
+            if (item->widget()) item->widget()->deleteLater();
+            delete item;
+        }
+
+        QByteArray data = achievementsReply->readAll();
+        QJsonDocument doc = QJsonDocument::fromJson(data);
+        QJsonObject obj = doc.object();
+        QJsonArray achievements = obj["achievements"].toArray();
+
+        if (achievements.isEmpty()) {
+            auto *emptyLbl = new QLabel("No achievements available.");
+            emptyLbl->setStyleSheet("color: #555555; font-size: 12px; background: transparent; padding: 16px;");
+            achievementsLayout->addWidget(emptyLbl);
+            achievementsLayout->addStretch();
+            return;
+        }
+
+        int unlockedCount = 0;
+        for (const QJsonValue &val : achievements) {
+            QJsonObject ach = val.toObject();
+            bool unlocked = ach["unlocked"].toBool();
+            if (unlocked) unlockedCount++;
+
+            auto *card = new QWidget();
+            card->setStyleSheet(
+                QString("background-color: %1; border: 1px solid #2a2a2a; border-radius: 8px; padding: 12px;")
+                    .arg(unlocked ? "#1a2a1a" : "#1a1a1a"));
+            auto *cardLayout = new QHBoxLayout(card);
+            cardLayout->setContentsMargins(12, 8, 12, 8);
+            cardLayout->setSpacing(12);
+
+            auto *iconLbl = new QLabel(unlocked ? QChar(0x2714) : QChar(0x2718));
+            iconLbl->setStyleSheet(QString("color: %1; font-size: 20px; background: transparent;").arg(unlocked ? "#00ff88" : "#ff4444"));
+            iconLbl->setFixedWidth(28);
+            iconLbl->setAlignment(Qt::AlignCenter);
+            cardLayout->addWidget(iconLbl);
+
+            auto *infoLay = new QVBoxLayout();
+            infoLay->setSpacing(2);
+            auto *achName = new QLabel(ach["name"].toString());
+            achName->setStyleSheet(QString("color: %1; font-size: 13px; font-weight: bold; background: transparent;")
+                .arg(unlocked ? "#e0e0e0" : "#888888"));
+            infoLay->addWidget(achName);
+
+            auto *achDesc = new QLabel(ach["description"].toString());
+            achDesc->setStyleSheet("color: #888888; font-size: 11px; background: transparent;");
+            achDesc->setWordWrap(true);
+            infoLay->addWidget(achDesc);
+
+            cardLayout->addLayout(infoLay);
+            cardLayout->addStretch();
+            achievementsLayout->addWidget(card);
+        }
+
+        auto *progressLbl = new QLabel(QString("%1 / %2 unlocked").arg(unlockedCount).arg(achievements.size()));
+        progressLbl->setStyleSheet("color: #00ff88; font-size: 12px; background: transparent; padding: 8px 0;");
+        achievementsLayout->insertWidget(0, progressLbl);
+        achievementsLayout->addStretch();
+    });
+
+    // Leaderboard section
+    auto *leaderboardTitle = new QLabel("LEADERBOARD");
+    leaderboardTitle->setStyleSheet("color: #00ff88; font-size: 16px; font-weight: bold; letter-spacing: 2px; background: transparent; margin-top: 16px;");
+    layout->addWidget(leaderboardTitle);
+
+    auto *leaderboardContainer = new QWidget();
+    leaderboardContainer->setStyleSheet("background: transparent;");
+    auto *leaderboardLayout = new QVBoxLayout(leaderboardContainer);
+    leaderboardLayout->setContentsMargins(0, 0, 0, 0);
+    leaderboardLayout->setSpacing(4);
+
+    auto *leaderboardLoading = new QLabel("Loading leaderboard...");
+    leaderboardLoading->setStyleSheet("color: #888888; font-size: 12px; background: transparent;");
+    leaderboardLayout->addWidget(leaderboardLoading);
+    layout->addWidget(leaderboardContainer);
+
+    QNetworkRequest leaderboardReq(QUrl(m_serverUrl + "/api/games/" + QString::number(game.id) + "/leaderboard?limit=50"));
+    leaderboardReq.setRawHeader("Authorization", "Bearer " + m_authToken.toUtf8());
+    leaderboardReq.setTransferTimeout(10000);
+    QNetworkReply *leaderboardReply = m_reviewManager->get(leaderboardReq);
+    connect(leaderboardReply, &QNetworkReply::finished, this, [this, leaderboardReply, leaderboardContainer, leaderboardLayout, leaderboardLoading]() {
+        leaderboardReply->deleteLater();
+        delete leaderboardLoading;
+
+        QLayoutItem *item;
+        while ((item = leaderboardLayout->takeAt(0)) != nullptr) {
+            if (item->widget()) item->widget()->deleteLater();
+            delete item;
+        }
+
+        QByteArray data = leaderboardReply->readAll();
+        QJsonDocument doc = QJsonDocument::fromJson(data);
+        QJsonObject obj = doc.object();
+        QJsonArray entries = obj["leaderboard"].toArray();
+        if (entries.isEmpty()) entries = obj["entries"].toArray();
+
+        if (entries.isEmpty()) {
+            auto *emptyLbl = new QLabel("No leaderboard data available.");
+            emptyLbl->setStyleSheet("color: #555555; font-size: 12px; background: transparent; padding: 16px;");
+            leaderboardLayout->addWidget(emptyLbl);
+            leaderboardLayout->addStretch();
+            return;
+        }
+
+        for (int i = 0; i < entries.size(); i++) {
+            QJsonObject entry = entries[i].toObject();
+            int rank = i + 1;
+            QString username = entry["username"].toString();
+            QString score = entry["score"].toString();
+            if (score.isEmpty()) score = QString::number(entry["score"].toInt());
+
+            auto *row = new QWidget();
+            row->setStyleSheet(
+                QString("background-color: %1; border: 1px solid #2a2a2a; border-radius: 4px; padding: 8px;")
+                    .arg(rank <= 3 ? "#1a2a1a" : "#1a1a1a"));
+            auto *rowLayout = new QHBoxLayout(row);
+            rowLayout->setContentsMargins(12, 6, 12, 6);
+
+            auto *rankLbl = new QLabel(QString("#%1").arg(rank));
+            rankLbl->setStyleSheet(QString("color: %1; font-size: 14px; font-weight: bold; background: transparent;")
+                .arg(rank == 1 ? "#ffd700" : rank == 2 ? "#c0c0c0" : rank == 3 ? "#cd7f32" : "#888888"));
+            rankLbl->setFixedWidth(40);
+            rowLayout->addWidget(rankLbl);
+
+            auto *userLbl = new QLabel(username);
+            userLbl->setStyleSheet("color: #e0e0e0; font-size: 13px; background: transparent;");
+            rowLayout->addWidget(userLbl);
+
+            rowLayout->addStretch();
+
+            auto *scoreLbl = new QLabel(score);
+            scoreLbl->setStyleSheet("color: #00ff88; font-size: 13px; font-weight: bold; background: transparent;");
+            rowLayout->addWidget(scoreLbl);
+
+            leaderboardLayout->addWidget(row);
+        }
+        leaderboardLayout->addStretch();
+    });
+
+    // Mods section
+    auto *modsTitle = new QLabel("MODS");
+    modsTitle->setStyleSheet("color: #00ff88; font-size: 16px; font-weight: bold; letter-spacing: 2px; background: transparent; margin-top: 16px;");
+    layout->addWidget(modsTitle);
+
+    auto *modsContainer = new QWidget();
+    modsContainer->setStyleSheet("background: transparent;");
+    auto *modsLayout = new QVBoxLayout(modsContainer);
+    modsLayout->setContentsMargins(0, 0, 0, 0);
+    modsLayout->setSpacing(8);
+
+    auto *modsLoading = new QLabel("Loading mods...");
+    modsLoading->setStyleSheet("color: #888888; font-size: 12px; background: transparent;");
+    modsLayout->addWidget(modsLoading);
+    layout->addWidget(modsContainer);
+
+    QNetworkRequest modsReq(QUrl(m_serverUrl + "/api/games/" + QString::number(game.id) + "/mods"));
+    modsReq.setRawHeader("Authorization", "Bearer " + m_authToken.toUtf8());
+    modsReq.setTransferTimeout(10000);
+    QNetworkReply *modsReply = m_reviewManager->get(modsReq);
+    connect(modsReply, &QNetworkReply::finished, this, [this, modsReply, modsContainer, modsLayout, modsLoading]() {
+        modsReply->deleteLater();
+        delete modsLoading;
+
+        QLayoutItem *item;
+        while ((item = modsLayout->takeAt(0)) != nullptr) {
+            if (item->widget()) item->widget()->deleteLater();
+            delete item;
+        }
+
+        QByteArray data = modsReply->readAll();
+        QJsonDocument doc = QJsonDocument::fromJson(data);
+        QJsonObject obj = doc.object();
+        QJsonArray mods = obj["mods"].toArray();
+
+        if (mods.isEmpty()) {
+            auto *emptyLbl = new QLabel("No mods available.");
+            emptyLbl->setStyleSheet("color: #555555; font-size: 12px; background: transparent; padding: 16px;");
+            modsLayout->addWidget(emptyLbl);
+            modsLayout->addStretch();
+            return;
+        }
+
+        for (const QJsonValue &val : mods) {
+            QJsonObject mod = val.toObject();
+
+            auto *card = new QWidget();
+            card->setStyleSheet("background-color: #1a1a1a; border: 1px solid #2a2a2a; border-radius: 8px;");
+            auto *cardLayout = new QHBoxLayout(card);
+            cardLayout->setContentsMargins(16, 12, 16, 12);
+            cardLayout->setSpacing(12);
+
+            auto *infoLay = new QVBoxLayout();
+            infoLay->setSpacing(4);
+            auto *modName = new QLabel(mod["name"].toString());
+            modName->setStyleSheet("color: #e0e0e0; font-size: 14px; font-weight: bold; background: transparent;");
+            infoLay->addWidget(modName);
+
+            auto *modDesc = new QLabel(mod["description"].toString());
+            modDesc->setStyleSheet("color: #888888; font-size: 12px; background: transparent;");
+            modDesc->setWordWrap(true);
+            infoLay->addWidget(modDesc);
+
+            auto *modMeta = new QLabel("By " + mod["author"].toString() + " | v" + mod["version"].toString());
+            modMeta->setStyleSheet("color: #555555; font-size: 11px; background: transparent;");
+            infoLay->addWidget(modMeta);
+
+            cardLayout->addLayout(infoLay);
+            cardLayout->addStretch();
+
+            auto *modDownloadBtn = new QPushButton("DOWNLOAD");
+            modDownloadBtn->setCursor(Qt::PointingHandCursor);
+            modDownloadBtn->setStyleSheet(
+                "QPushButton { background-color: #00ff88; color: #000000; border: none; border-radius: 4px; "
+                "padding: 8px 16px; font-size: 12px; font-weight: bold; }"
+                "QPushButton:hover { background-color: #00cc6a; }");
+            connect(modDownloadBtn, &QPushButton::clicked, this, [mod]() {
+                QString url = mod["download_url"].toString();
+                if (!url.isEmpty()) {
+                    QDesktopServices::openUrl(QUrl(url));
+                }
+            });
+            cardLayout->addWidget(modDownloadBtn);
+
+            modsLayout->addWidget(card);
+        }
+        modsLayout->addStretch();
+    });
+
+    // Multiplayer servers section
+    auto *serversTitle = new QLabel("MULTIPLAYER SERVERS");
+    serversTitle->setStyleSheet("color: #00ff88; font-size: 16px; font-weight: bold; letter-spacing: 2px; background: transparent; margin-top: 16px;");
+    layout->addWidget(serversTitle);
+
+    auto *serversContainer = new QWidget();
+    serversContainer->setStyleSheet("background: transparent;");
+    auto *serversLayout = new QVBoxLayout(serversContainer);
+    serversLayout->setContentsMargins(0, 0, 0, 0);
+    serversLayout->setSpacing(8);
+
+    auto *serversLoading = new QLabel("Loading servers...");
+    serversLoading->setStyleSheet("color: #888888; font-size: 12px; background: transparent;");
+    serversLayout->addWidget(serversLoading);
+    layout->addWidget(serversContainer);
+
+    QNetworkRequest serversReq(QUrl(m_serverUrl + "/api/games/" + QString::number(game.id) + "/servers"));
+    serversReq.setRawHeader("Authorization", "Bearer " + m_authToken.toUtf8());
+    serversReq.setTransferTimeout(10000);
+    QNetworkReply *serversReply = m_reviewManager->get(serversReq);
+    connect(serversReply, &QNetworkReply::finished, this, [this, serversReply, serversContainer, serversLayout, serversLoading]() {
+        serversReply->deleteLater();
+        delete serversLoading;
+
+        QLayoutItem *item;
+        while ((item = serversLayout->takeAt(0)) != nullptr) {
+            if (item->widget()) item->widget()->deleteLater();
+            delete item;
+        }
+
+        QByteArray data = serversReply->readAll();
+        QJsonDocument doc = QJsonDocument::fromJson(data);
+        QJsonObject obj = doc.object();
+        QJsonArray servers = obj["servers"].toArray();
+
+        if (servers.isEmpty()) {
+            auto *emptyLbl = new QLabel("No multiplayer servers available.");
+            emptyLbl->setStyleSheet("color: #555555; font-size: 12px; background: transparent; padding: 16px;");
+            serversLayout->addWidget(emptyLbl);
+            serversLayout->addStretch();
+            return;
+        }
+
+        for (const QJsonValue &val : servers) {
+            QJsonObject srv = val.toObject();
+
+            auto *card = new QWidget();
+            card->setStyleSheet("background-color: #1a1a1a; border: 1px solid #2a2a2a; border-radius: 8px;");
+            auto *cardLayout = new QHBoxLayout(card);
+            cardLayout->setContentsMargins(16, 12, 16, 12);
+            cardLayout->setSpacing(12);
+
+            auto *statusDot = new QLabel(QChar(0x25CF));
+            bool online = srv["online"].toBool() || srv["status"].toString() == "online";
+            statusDot->setStyleSheet(QString("color: %1; font-size: 16px; background: transparent;").arg(online ? "#00ff88" : "#ff4444"));
+            statusDot->setFixedWidth(20);
+            statusDot->setAlignment(Qt::AlignCenter);
+            cardLayout->addWidget(statusDot);
+
+            auto *infoLay = new QVBoxLayout();
+            infoLay->setSpacing(4);
+            auto *srvName = new QLabel(srv["name"].toString());
+            srvName->setStyleSheet("color: #e0e0e0; font-size: 14px; font-weight: bold; background: transparent;");
+            infoLay->addWidget(srvName);
+
+            int players = srv["players"].toInt();
+            int maxPlayers = srv["max_players"].toInt();
+            auto *playersLbl = new QLabel(QString("%1/%2 players").arg(players).arg(maxPlayers));
+            playersLbl->setStyleSheet("color: #888888; font-size: 12px; background: transparent;");
+            infoLay->addWidget(playersLbl);
+
+            QString addr = srv["address"].toString();
+            if (addr.isEmpty()) addr = srv["ip"].toString() + ":" + QString::number(srv["port"].toInt());
+            auto *addrLbl = new QLabel(addr);
+            addrLbl->setStyleSheet("color: #555555; font-size: 11px; background: transparent;");
+            infoLay->addWidget(addrLbl);
+
+            cardLayout->addLayout(infoLay);
+            cardLayout->addStretch();
+
+            auto *joinBtn = new QPushButton("JOIN");
+            joinBtn->setCursor(Qt::PointingHandCursor);
+            joinBtn->setStyleSheet(
+                "QPushButton { background-color: #00ff88; color: #000000; border: none; border-radius: 4px; "
+                "padding: 8px 24px; font-size: 12px; font-weight: bold; }"
+                "QPushButton:hover { background-color: #00cc6a; }");
+            connect(joinBtn, &QPushButton::clicked, this, [srv]() {
+                QString joinUrl = srv["join_url"].toString();
+                if (!joinUrl.isEmpty()) {
+                    QDesktopServices::openUrl(QUrl(joinUrl));
+                }
+            });
+            cardLayout->addWidget(joinBtn);
+
+            serversLayout->addWidget(card);
+        }
+        serversLayout->addStretch();
+    });
+
+    // Reviews section
     auto *reviewsTitle = new QLabel("REVIEWS");
     reviewsTitle->setStyleSheet("color: #00ff88; font-size: 16px; font-weight: bold; letter-spacing: 2px; background: transparent; margin-top: 16px;");
     layout->addWidget(reviewsTitle);

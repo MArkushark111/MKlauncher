@@ -132,6 +132,7 @@ func main() {
 	router.HandleFunc("/api/friends/{id:[0-9]+}", api.HandleRemoveFriend).Methods("DELETE")
 
 	router.HandleFunc("/api/categories", api.HandleGetCategories).Methods("GET")
+	router.HandleFunc("/api/admin/categories", api.RequireAuth(api.HandleAddCategory)).Methods("POST")
 	router.HandleFunc("/api/games/{id:[0-9]+}/categories", api.HandleGetGameCategories).Methods("GET")
 	router.HandleFunc("/api/games/{id:[0-9]+}/categories", api.RequireAuth(api.HandleSetGameCategories)).Methods("POST")
 	router.HandleFunc("/api/games/{id:[0-9]+}/screenshots", api.HandleGetScreenshots).Methods("GET")

@@ -12,6 +12,7 @@
 #include <QNetworkReply>
 #include <QSystemTrayIcon>
 #include <QTimer>
+#include <QTextEdit>
 
 #include "gamegrid.h"
 #include "downloadmanager.h"
@@ -87,6 +88,24 @@ private:
     QWidget *m_detailPage = nullptr;
     QWidget *m_libraryPage = nullptr;
 
+    // Feature tracking
+    QTimer *m_playtimeTimer = nullptr;
+    int m_currentGameId = 0;
+
+    // Chat
+    QWidget *m_chatPage = nullptr;
+    QTextEdit *m_chatMessages = nullptr;
+    QLineEdit *m_chatInput = nullptr;
+    QComboBox *m_chatChannel = nullptr;
+    QTimer *m_chatPollTimer = nullptr;
+    int m_lastChatId = 0;
+
+    // News
+    QWidget *m_newsPage = nullptr;
+
+    // Categories filter
+    QComboBox *m_categoryFilter = nullptr;
+
     void setupConnectPage();
     void setupMainPage();
     void setupSettingsPage();
@@ -99,6 +118,23 @@ private:
     QString gameInstallPath(const QString &name);
     void showGameDetail(const ServerGame &game);
     void setupLibraryTab();
+    void setupNewsTab();
+    void setupChatTab();
+    void loadNews();
+    void loadCategories();
+    void filterByCategory(int categoryId);
+    void loadFeatured();
+    void loadRecentlyPlayed();
+    void startPlaytimeTracking(int gameId);
+    void stopPlaytimeTracking();
+    void pollChat();
+    void sendChatMessage();
+    void loadChatMessages();
+    void toggleWishlist(int gameId);
+    void loadWishlist();
+    void loadLeaderboard(int gameId);
+    void loadAchievements(int gameId);
+    void loadScreenshots(int gameId);
 };
 
 #endif
