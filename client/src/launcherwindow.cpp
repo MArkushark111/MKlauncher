@@ -2443,12 +2443,14 @@ void LauncherWindow::setupLibraryTab() {
 }
 
 void LauncherWindow::checkForUpdates(bool manual) {
-    if (m_serverUrl.isEmpty()) { qDebug() << "[UPDATE] No server URL, skipping"; if (manual) QMessageBox::information(this, "Update", "No server configured."); return; }
+    if (m_serverUrl.isEmpty()) { if (manual) QMessageBox::information(this, "Update", "No server configured."); return; }
     QNetworkRequest request{QUrl(m_serverUrl + "/api/launcher/version")};
     request.setTransferTimeout(10000);
-    QNetworkReply *reply = m_authManager->get(request);
-    connect(reply, &QNetworkReply::finished, this, [this, reply, manual]() {
+    QNetworkAccessManager *mgr = new QNetworkAccessManager(this);
+    QNetworkReply *reply = mgr->get(request);
+    connect(reply, &QNetworkReply::finished, this, [this, reply, manual, mgr]() {
         reply->deleteLater();
+        mgr->deleteLater();
         if (reply->error() != QNetworkReply::NoError) {
             qDebug() << "[UPDATE] Network error:" << reply->errorString();
             if (manual) QMessageBox::warning(this, "Update", "Check failed: " + reply->errorString());
@@ -2458,8 +2460,7 @@ void LauncherWindow::checkForUpdates(bool manual) {
         QJsonObject obj = doc.object();
         qDebug() << "[UPDATE] Server response:" << doc.toJson();
         if (!obj["has_update"].toBool()) {
-            qDebug() << "[UPDATE] No update available";
-            if (manual) QMessageBox::information(this, "Update", "You're up to date! (v" + QApplication::applicationVersion() + ")");
+            if (manual) QMessageBox::information(this, "Update", "No update available on server.");
             return;
         }
         QString serverVersion = obj["version"].toString();
@@ -2483,9 +2484,11 @@ void LauncherWindow::checkForUpdates(bool manual) {
             QString savePath = QDir::temp().filePath("MKLauncher-Setup-v" + serverVersion + ".exe");
             QNetworkRequest dlReq{QUrl(downloadUrl)};
             dlReq.setTransferTimeout(300000);
-            QNetworkReply *dlReply = m_authManager->get(dlReq);
-            connect(dlReply, &QNetworkReply::finished, this, [this, dlReply, savePath, serverVersion]() {
+            QNetworkAccessManager *dlMgr = new QNetworkAccessManager(this);
+            QNetworkReply *dlReply = dlMgr->get(dlReq);
+            connect(dlReply, &QNetworkReply::finished, this, [this, dlReply, savePath, serverVersion, dlMgr]() {
                 dlReply->deleteLater();
+                dlMgr->deleteLater();
                 if (dlReply->error() != QNetworkReply::NoError) {
                     QMessageBox::warning(this, "Update Failed", "Download failed: " + dlReply->errorString());
                     return;
