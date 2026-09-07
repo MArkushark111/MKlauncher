@@ -96,14 +96,18 @@ func HandleFinalizeUpload(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var req struct {
-		Name string `json:"name"`
-		Description string `json:"description"`
-		Version string `json:"version"`
-		Category string `json:"category"`
-		Tags string `json:"tags"`
-		GameFolder string `json:"game_folder"`
-		ExePath string `json:"exe_path"`
-		Files []string `json:"files"`
+		Name        string   `json:"name"`
+		Description string   `json:"description"`
+		Version     string   `json:"version"`
+		Category    string   `json:"category"`
+		Tags        string   `json:"tags"`
+		GameFolder  string   `json:"game_folder"`
+		ExePath     string   `json:"exe_path"`
+		Files       []string `json:"files"`
+		CoverPath   string   `json:"cover_path"`
+		BgPath      string   `json:"bg_path"`
+		LogoPath    string   `json:"logo_path"`
+		WidePath    string   `json:"wide_path"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || strings.TrimSpace(req.Name) == "" {
 		http.Error(w, "Invalid game metadata", http.StatusBadRequest)
@@ -116,13 +120,49 @@ func HandleFinalizeUpload(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
+
 	game := &db.Game{Name: req.Name, Description: req.Description, Version: req.Version, Category: req.Category, Tags: req.Tags, GameFolder: req.GameFolder, ExePath: req.ExePath, ArchivePath: archivePath, FileSize: size}
+
+	prefix := fmt.Sprintf("%d", timeNowUnix())
+	if req.CoverPath != "" {
+		game.CoverURL = moveUploadedImage(base, req.CoverPath, prefix+"_cover")
+	}
+	if req.BgPath != "" {
+		game.BackgroundURL = moveUploadedImage(base, req.BgPath, prefix+"_bg")
+	}
+	if req.LogoPath != "" {
+		game.LogoURL = moveUploadedImage(base, req.LogoPath, prefix+"_logo")
+	}
+	if req.WidePath != "" {
+		game.WideCoverURL = moveUploadedImage(base, req.WidePath, prefix+"_wide")
+	}
+
 	if err := db.DB.AddGame(game); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 	os.RemoveAll(base)
 	json.NewEncoder(w).Encode(game)
+}
+
+func moveUploadedImage(base, uploadPath, newName string) string {
+	src := filepath.Join(base, filepath.FromSlash(uploadPath))
+	info, err := os.Stat(src)
+	if err != nil {
+		return ""
+	}
+	os.MkdirAll("storage/covers", 0755)
+	ext := filepath.Ext(src)
+	dst := filepath.Join("storage/covers", newName+ext)
+	if err := os.Rename(src, dst); err != nil {
+		data, readErr := os.ReadFile(src)
+		if readErr != nil {
+			return ""
+		}
+		os.WriteFile(dst, data, 0644)
+		os.Remove(src)
+	}
+	return dst
 }
 
 func zipUploadFiles(base, gameName, version string, files []string) (string, int64, error) {

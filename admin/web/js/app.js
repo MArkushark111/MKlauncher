@@ -507,6 +507,27 @@ async function uploadFileWithRetry(session, file, path, index, total) {
 let filesUploadedBytes = 0;
 let filesTotalBytes = 0;
 
+async function uploadImageFile(session, fileInputId, pathPrefix) {
+    const input = document.getElementById(fileInputId);
+    if (!input || !input.files || !input.files[0]) return '';
+    const file = input.files[0];
+    const ext = file.name.split('.').pop();
+    const path = pathPrefix + '.' + ext;
+    const form = new FormData();
+    form.append('path', path);
+    form.append('offset', '0');
+    form.append('total_size', String(file.size));
+    form.append('file', file, path);
+    const response = await fetch(API + '/api/uploads/' + encodeURIComponent(session) + '/file', {
+        method: 'POST',
+        headers: { 'Authorization': 'Bearer ' + authToken },
+        body: form
+    });
+    const data = await response.json();
+    if (!response.ok || data.error) throw new Error(data.error || 'Image upload failed');
+    return path;
+}
+
 async function submitGame() {
     const btn = document.getElementById('add-game-btn');
     const progress = document.getElementById('add-progress');
@@ -527,9 +548,17 @@ async function submitGame() {
     filesUploadedBytes = 0;
     filesTotalBytes = files.reduce((totalBytes, file) => totalBytes + file.size, 0);
     try {
+        document.getElementById('add-progress-text').textContent = 'Uploading game files...';
         for (let index = 0; index < files.length; index++) {
             await uploadFileWithRetry(session, files[index], paths[index], index, files.length);
         }
+
+        document.getElementById('add-progress-text').textContent = 'Uploading images...';
+        const coverPath = await uploadImageFile(session, 'cover-file', 'cover');
+        const bgPath = await uploadImageFile(session, 'bg-file', 'bg');
+        const logoPath = await uploadImageFile(session, 'logo-file', 'logo');
+        const widePath = await uploadImageFile(session, 'wide-file', 'wide');
+
         const response = await fetch(API + '/api/uploads/' + encodeURIComponent(session) + '/finalize', {
             method: 'POST',
             headers: { 'Authorization': 'Bearer ' + authToken, 'Content-Type': 'application/json' },
@@ -541,7 +570,11 @@ async function submitGame() {
                 tags: document.getElementById('game-tags').value,
                 game_folder: document.getElementById('game-folder').value,
                 exe_path: document.getElementById('game-exe').value,
-                files: paths
+                files: paths,
+                cover_path: coverPath,
+                bg_path: bgPath,
+                logo_path: logoPath,
+                wide_path: widePath
             })
         });
         const data = await response.json();
