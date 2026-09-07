@@ -1357,11 +1357,7 @@ func HandleGetLauncherVersion(w http.ResponseWriter, r *http.Request) {
 
 func HandleUploadLauncherUpdate(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
-	if err := r.ParseMultipartForm(500 << 20); err != nil {
-		w.WriteHeader(http.StatusBadRequest)
-		json.NewEncoder(w).Encode(map[string]string{"error": "Invalid form data"})
-		return
-	}
+	r.ParseMultipartForm(1024 << 20)
 	version := r.FormValue("version")
 	changelog := r.FormValue("changelog")
 	if version == "" {

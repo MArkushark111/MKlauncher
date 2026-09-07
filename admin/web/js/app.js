@@ -280,10 +280,9 @@ function uploadLauncherUpdate() {
     formData.append('version', version);
     formData.append('changelog', changelog);
     formData.append('file', fileInput.files[0]);
-    const token = localStorage.getItem('admin_token');
     fetch('/api/admin/launcher/upload', {
         method: 'POST',
-        headers: { 'Authorization': 'Bearer ' + token },
+        headers: { 'Authorization': 'Bearer ' + authToken },
         body: formData
     }).then(r => r.json()).then(data => {
         if (data.success) {
@@ -330,10 +329,9 @@ function addGameURL() {
     const bgFile = document.getElementById('url-game-bg').files[0];
     if (coverFile) formData.append('cover', coverFile);
     if (bgFile) formData.append('background', bgFile);
-    const token = localStorage.getItem('admin_token');
     fetch('/api/games/url', {
         method: 'POST',
-        headers: { 'Authorization': 'Bearer ' + token },
+        headers: { 'Authorization': 'Bearer ' + authToken },
         body: formData
     }).then(r => r.json()).then(data => {
         if (data.id) {
