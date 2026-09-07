@@ -69,14 +69,14 @@ function logout() {
     document.getElementById('auth-screen').classList.add('active');
 }
 
-function showTab(tab) {
+function showTab(tab, event) {
     document.querySelectorAll('.tab').forEach(t => { t.classList.add('hidden'); t.classList.remove('active'); });
     document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
 
     document.getElementById('tab-' + tab).classList.remove('hidden');
     document.getElementById('tab-' + tab).classList.add('active');
 
-    event.currentTarget.classList.add('active');
+    if (event && event.currentTarget) event.currentTarget.classList.add('active');
 
     switch(tab) {
         case 'dashboard': loadDashboard(); break;
