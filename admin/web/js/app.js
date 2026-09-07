@@ -58,11 +58,6 @@ function showAdminScreen() {
     document.getElementById('admin-screen').classList.remove('hidden');
     document.getElementById('admin-screen').classList.add('active');
     loadDashboard();
-    api('GET', '/api/config').then(cfg => {
-        if (cfg && cfg.wan_host) {
-            document.getElementById('devportal-link').href = 'http://' + cfg.wan_host + ':7878';
-        }
-    });
 }
 
 /* News Admin */
@@ -303,6 +298,57 @@ function uploadLauncherUpdate() {
     }).catch(e => alert('Upload failed: ' + e));
 }
 
+/* Add Game (URL) */
+function loadURLGameCategories() {
+    api('GET', '/api/categories').then(data => {
+        const sel = document.getElementById('url-game-category');
+        sel.innerHTML = '';
+        if (data) data.forEach(c => {
+            sel.innerHTML += `<option value="${c.name}">${c.icon} ${c.name}</option>`;
+        });
+    });
+}
+
+function addGameURL() {
+    const name = document.getElementById('url-game-name').value.trim();
+    const version = document.getElementById('url-game-version').value.trim();
+    const category = document.getElementById('url-game-category').value;
+    const desc = document.getElementById('url-game-desc').value.trim();
+    const tags = document.getElementById('url-game-tags').value.trim();
+    const download_url = document.getElementById('url-game-download').value.trim();
+    const exe_path = document.getElementById('url-game-exe').value.trim();
+    if (!name || !download_url || !exe_path) { alert('Name, download URL, and exe path are required'); return; }
+    const formData = new FormData();
+    formData.append('name', name);
+    formData.append('version', version || '1.0.0');
+    formData.append('category', category);
+    formData.append('description', desc);
+    formData.append('tags', tags);
+    formData.append('download_url', download_url);
+    formData.append('exe_path', exe_path);
+    const coverFile = document.getElementById('url-game-cover').files[0];
+    const bgFile = document.getElementById('url-game-bg').files[0];
+    if (coverFile) formData.append('cover', coverFile);
+    if (bgFile) formData.append('background', bgFile);
+    const token = localStorage.getItem('admin_token');
+    fetch('/api/games/url', {
+        method: 'POST',
+        headers: { 'Authorization': 'Bearer ' + token },
+        body: formData
+    }).then(r => r.json()).then(data => {
+        if (data.id) {
+            document.getElementById('url-game-name').value = '';
+            document.getElementById('url-game-desc').value = '';
+            document.getElementById('url-game-tags').value = '';
+            document.getElementById('url-game-download').value = '';
+            document.getElementById('url-game-exe').value = '';
+            alert('Game "' + name + '" added! (URL download, no server disk used)');
+        } else {
+            alert(data.error || 'Failed to add game');
+        }
+    }).catch(e => alert('Error: ' + e));
+}
+
 function logout() {
     authToken = '';
     localStorage.removeItem('mk_token');
@@ -324,6 +370,7 @@ function showTab(tab, event) {
     switch(tab) {
         case 'dashboard': loadDashboard(); break;
         case 'games': loadGames(); break;
+        case 'add-game-url': loadURLGameCategories(); break;
         case 'archives': loadArchives(); break;
         case 'admins': loadAdmins(); break;
         case 'users': loadUsers(); break;

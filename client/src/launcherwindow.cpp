@@ -1611,6 +1611,12 @@ void LauncherWindow::showGameDetail(const ServerGame &game) {
     versionLabel->setStyleSheet("color: #888888; font-size: 13px; background: transparent;");
     infoLayout->addWidget(versionLabel);
 
+    QString sourceText = (game.storageType == "url") ? "Game Files: External URL" : "Game Files: Server Disk";
+    QColor sourceColor = (game.storageType == "url") ? QColor("#ffaa00") : QColor("#00ff88");
+    auto *sourceLabel = new QLabel(sourceText);
+    sourceLabel->setStyleSheet(QString("color: %1; font-size: 11px; background: transparent; font-weight: bold; letter-spacing: 1px;").arg(sourceColor.name()));
+    infoLayout->addWidget(sourceLabel);
+
     if (game.reviewCount > 0) {
         QString stars;
         int full = (int)game.avgStars;

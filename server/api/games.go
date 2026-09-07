@@ -216,6 +216,58 @@ func HandleCreateDeveloperGame(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(game)
 }
 
+func HandleAddGameURL(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	if err := r.ParseMultipartForm(4096 << 20); err != nil {
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(map[string]string{"error": "Invalid form data"})
+		return
+	}
+	game := &db.Game{
+		Name:        r.FormValue("name"),
+		Description: r.FormValue("description"),
+		Version:     r.FormValue("version"),
+		Category:    r.FormValue("category"),
+		Tags:        r.FormValue("tags"),
+		ExePath:     r.FormValue("exe_path"),
+		DownloadURL: r.FormValue("download_url"),
+		StorageType: "url",
+	}
+	if game.Name == "" {
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(map[string]string{"error": "Game name required"})
+		return
+	}
+	if game.Version == "" { game.Version = "1.0.0" }
+	if _, fh, err := r.FormFile("cover"); err == nil {
+		game.CoverURL = saveUploadedFile(fh, "storage/covers", fmt.Sprintf("%d_cover", timeNowUnix()))
+	}
+	if _, fh, err := r.FormFile("background"); err == nil {
+		game.BackgroundURL = saveUploadedFile(fh, "storage/covers", fmt.Sprintf("%d_bg", timeNowUnix()))
+	}
+	if _, fh, err := r.FormFile("logo"); err == nil {
+		game.LogoURL = saveUploadedFile(fh, "storage/covers", fmt.Sprintf("%d_logo", timeNowUnix()))
+	}
+	if _, fh, err := r.FormFile("wide_cover"); err == nil {
+		game.WideCoverURL = saveUploadedFile(fh, "storage/covers", fmt.Sprintf("%d_wide", timeNowUnix()))
+	}
+	config, _ := db.DB.GetConfig()
+	if config != nil && config.WANHost != "" && config.WANPort != "" {
+		if game.CoverURL != "" { game.CoverURL = fmt.Sprintf("http://%s:%s/covers/%s", config.WANHost, config.WANPort, filepath.Base(game.CoverURL)) }
+		if game.BackgroundURL != "" { game.BackgroundURL = fmt.Sprintf("http://%s:%s/covers/%s", config.WANHost, config.WANPort, filepath.Base(game.BackgroundURL)) }
+		if game.LogoURL != "" { game.LogoURL = fmt.Sprintf("http://%s:%s/covers/%s", config.WANHost, config.WANPort, filepath.Base(game.LogoURL)) }
+		if game.WideCoverURL != "" { game.WideCoverURL = fmt.Sprintf("http://%s:%s/covers/%s", config.WANHost, config.WANPort, filepath.Base(game.WideCoverURL)) }
+	}
+	if err := db.DB.AddGame(game); err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		json.NewEncoder(w).Encode(map[string]string{"error": err.Error()})
+		return
+	}
+	log.Printf("[API] URL game added: %s (ID: %d) URL: %s", game.Name, game.ID, game.DownloadURL)
+	w.WriteHeader(http.StatusCreated)
+	json.NewEncoder(w).Encode(game)
+}
+
 func HandleUpdateGame(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 

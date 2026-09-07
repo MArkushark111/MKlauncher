@@ -141,15 +141,24 @@ func HandleBanUser(w http.ResponseWriter, r *http.Request) {
 	id, err := strconv.Atoi(idStr)
 	if err != nil {
 		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(map[string]string{"error": "Invalid user ID"})
 		return
 	}
 	var req struct {
 		Banned bool `json:"banned"`
 	}
-	json.NewDecoder(r.Body).Decode(&req)
-	db.DB.BanUser(id, req.Banned)
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(map[string]string{"error": "Invalid request body"})
+		return
+	}
+	if err := db.DB.BanUser(id, req.Banned); err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		json.NewEncoder(w).Encode(map[string]string{"error": "Failed to update ban status"})
+		return
+	}
 	log.Printf("[API] User %d banned=%v", id, req.Banned)
-	json.NewEncoder(w).Encode(map[string]string{"message": "OK"})
+	json.NewEncoder(w).Encode(map[string]interface{}{"success": true, "banned": req.Banned})
 }
 
 func HandleSendFriendRequest(w http.ResponseWriter, r *http.Request) {

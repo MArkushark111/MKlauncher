@@ -28,6 +28,8 @@ type Game struct {
 	DeveloperID   int       `json:"developer_id"`
 	IsPublic      bool      `json:"is_public"`
 	Downloads     int       `json:"downloads"`
+	DownloadURL   string    `json:"download_url"`
+	StorageType   string    `json:"storage_type"`
 	CreatedAt     time.Time `json:"created_at"`
 	UpdatedAt     time.Time `json:"updated_at"`
 }

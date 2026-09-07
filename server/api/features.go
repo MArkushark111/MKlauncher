@@ -1077,32 +1077,14 @@ func HandleAddMod(w http.ResponseWriter, r *http.Request) {
 
 func HandleDeleteMod(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
-	userID, _ := strconv.Atoi(r.Header.Get("X-User-ID"))
-	if userID == 0 {
-		w.WriteHeader(http.StatusUnauthorized)
-		json.NewEncoder(w).Encode(map[string]string{"error": "Unauthorized"})
-		return
-	}
 	id, err := strconv.Atoi(mux.Vars(r)["id"])
 	if err != nil {
 		w.WriteHeader(http.StatusBadRequest)
 		json.NewEncoder(w).Encode(map[string]string{"error": "Invalid mod ID"})
 		return
 	}
-	var ownerID int
-	err = db.DB.Conn.QueryRow("SELECT user_id FROM mods WHERE id = ?", id).Scan(&ownerID)
-	if err != nil {
-		w.WriteHeader(http.StatusNotFound)
-		json.NewEncoder(w).Encode(map[string]string{"error": "Mod not found"})
-		return
-	}
-	if ownerID != userID {
-		w.WriteHeader(http.StatusForbidden)
-		json.NewEncoder(w).Encode(map[string]string{"error": "Not your mod"})
-		return
-	}
 	db.DB.Conn.Exec("DELETE FROM mods WHERE id = ?", id)
-	json.NewEncoder(w).Encode(map[string]string{"message": "Mod deleted"})
+	json.NewEncoder(w).Encode(map[string]interface{}{"success": true})
 }
 
 func HandleGetServers(w http.ResponseWriter, r *http.Request) {

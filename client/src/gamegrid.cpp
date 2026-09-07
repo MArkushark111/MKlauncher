@@ -75,6 +75,8 @@ void GameGrid::onGamesLoaded(QNetworkReply *reply) {
             game.downloadCount = obj["download_count"].toInt();
             game.avgStars = obj["avg_stars"].toDouble();
             game.reviewCount = obj["review_count"].toInt();
+            game.downloadUrl = obj["download_url"].toString();
+            game.storageType = obj["storage_type"].toString();
             m_games.append(game);
         }
     }
@@ -265,9 +267,13 @@ QWidget* GameGrid::createGameCard(const ServerGame &game) {
             "QPushButton#installBtn { background-color: #ffffff; color: #000000; border: none; border-radius: 4px; font-size: 12px; padding: 10px 24px; font-weight: bold; }"
             "QPushButton#installBtn:hover { background-color: #e0e0e0; }");
         connect(downloadBtn, &QPushButton::clicked, [this, game]() {
-            emit gameDownload(game.id, game.name,
-                            m_serverUrl + "/api/games/" + QString::number(game.id) + "/download",
-                            game.fileSize);
+            QString dlUrl;
+            if (game.storageType == "url" && !game.downloadUrl.isEmpty()) {
+                dlUrl = game.downloadUrl;
+            } else {
+                dlUrl = m_serverUrl + "/api/games/" + QString::number(game.id) + "/download";
+            }
+            emit gameDownload(game.id, game.name, dlUrl, game.fileSize);
         });
         btnLayout->addWidget(downloadBtn);
     }

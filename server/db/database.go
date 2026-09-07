@@ -311,6 +311,8 @@ func (d *Database) migrate() error {
 	d.Conn.Exec("ALTER TABLE games ADD COLUMN developer_id INTEGER DEFAULT 0")
 	d.Conn.Exec("ALTER TABLE games ADD COLUMN is_public INTEGER DEFAULT 1")
 	d.Conn.Exec("ALTER TABLE games ADD COLUMN downloads INTEGER DEFAULT 0")
+	d.Conn.Exec("ALTER TABLE games ADD COLUMN download_url TEXT DEFAULT ''")
+	d.Conn.Exec("ALTER TABLE games ADD COLUMN storage_type TEXT DEFAULT 'disk'")
 
 	var catCount int
 	d.Conn.QueryRow("SELECT COUNT(*) FROM categories").Scan(&catCount)
@@ -378,11 +380,11 @@ func (d *Database) AddGame(g *Game) error {
 	result, err := d.Conn.Exec(
 		`INSERT INTO games (name, description, version, category, tags, 
 		 cover_url, background_url, logo_url, wide_cover_url,
-		 archive_path, game_folder, exe_path, file_size, developer_id, is_public)
-		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		 archive_path, game_folder, exe_path, file_size, developer_id, is_public, download_url, storage_type)
+		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 		g.Name, g.Description, g.Version, g.Category, g.Tags,
 		g.CoverURL, g.BackgroundURL, g.LogoURL, g.WideCoverURL,
-		g.ArchivePath, g.GameFolder, g.ExePath, g.FileSize, g.DeveloperID, g.IsPublic,
+		g.ArchivePath, g.GameFolder, g.ExePath, g.FileSize, g.DeveloperID, g.IsPublic, g.DownloadURL, g.StorageType,
 	)
 	if err != nil {
 		return err

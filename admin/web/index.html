@@ -39,6 +39,9 @@
                 <li class="nav-item" onclick="showTab('add-game', event)">
                     <span class="nav-icon">&#43;</span> Add Game
                 </li>
+                <li class="nav-item" onclick="showTab('add-game-url', event)">
+                    <span class="nav-icon">&#128279;</span> Add Game (URL)
+                </li>
                 <li class="nav-item" onclick="showTab('archives', event)">
                     <span class="nav-icon">&#128230;</span> Archives
                 </li>
@@ -74,7 +77,6 @@
                 </li>
             </ul>
             <div class="sidebar-footer">
-                <a href="http://localhost:7878" target="_blank" id="devportal-link" class="btn btn-outline btn-sm" style="width:100%;text-decoration:none;text-align:center;margin-bottom:6px">DEV PORTAL</a>
                 <button class="btn btn-danger btn-sm" onclick="logout()">LOGOUT</button>
             </div>
         </nav>
@@ -254,6 +256,56 @@
                             <button class="btn btn-primary" id="add-game-btn" onclick="submitGame()">ADD GAME</button>
                         </div>
                     </div>
+                </div>
+            </div>
+
+            <div id="tab-add-game-url" class="tab hidden">
+                <h2 class="tab-title">ADD GAME (FROM URL)</h2>
+                <div class="card">
+                    <p style="color:var(--text-dim);margin-bottom:16px;font-size:13px">
+                        Game files are downloaded from an external URL. No server disk space used for game archives.
+                    </p>
+                    <div class="form-group">
+                        <label>GAME NAME</label>
+                        <input type="text" id="url-game-name" placeholder="My Game">
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group" style="flex:1">
+                            <label>VERSION</label>
+                            <input type="text" id="url-game-version" placeholder="1.0.0" value="1.0.0">
+                        </div>
+                        <div class="form-group" style="flex:1">
+                            <label>CATEGORY</label>
+                            <select id="url-game-category"></select>
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label>DESCRIPTION</label>
+                        <textarea id="url-game-desc" placeholder="Game description..."></textarea>
+                    </div>
+                    <div class="form-group">
+                        <label>TAGS</label>
+                        <input type="text" id="url-game-tags" placeholder="action, multiplayer, co-op">
+                    </div>
+                    <div class="form-group">
+                        <label>DOWNLOAD URL (direct link to .zip or .exe)</label>
+                        <input type="text" id="url-game-download" placeholder="https://example.com/game.zip">
+                    </div>
+                    <div class="form-group">
+                        <label>EXE PATH (inside archive, or just filename for .exe)</label>
+                        <input type="text" id="url-game-exe" placeholder="Game.exe">
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group" style="flex:1">
+                            <label>COVER IMAGE</label>
+                            <input type="file" id="url-game-cover" accept="image/*">
+                        </div>
+                        <div class="form-group" style="flex:1">
+                            <label>BACKGROUND IMAGE</label>
+                            <input type="file" id="url-game-bg" accept="image/*">
+                        </div>
+                    </div>
+                    <button class="btn btn-primary" onclick="addGameURL()" style="margin-top:8px">ADD GAME FROM URL</button>
                 </div>
             </div>
 

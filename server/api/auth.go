@@ -135,14 +135,26 @@ func RequireAuth(next http.HandlerFunc) http.HandlerFunc {
 			token = token[7:]
 		}
 
-		if !ValidateToken(token) {
-			w.Header().Set("Content-Type", "application/json")
-			w.WriteHeader(http.StatusUnauthorized)
-			json.NewEncoder(w).Encode(map[string]string{"error": "Unauthorized"})
+		if ValidateToken(token) {
+			var adminID int
+			db.DB.Conn.QueryRow("SELECT user_id FROM user_tokens WHERE token=?", token).Scan(&adminID)
+			if adminID > 0 {
+				r.Header.Set("X-User-ID", fmt.Sprintf("%d", adminID))
+			}
+			next(w, r)
 			return
 		}
 
-		next(w, r)
+		user, err := db.DB.ValidateUserToken(token)
+		if err == nil && user != nil {
+			r.Header.Set("X-User-ID", fmt.Sprintf("%d", user.ID))
+			next(w, r)
+			return
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusUnauthorized)
+		json.NewEncoder(w).Encode(map[string]string{"error": "Unauthorized"})
 	}
 }
 

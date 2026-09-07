@@ -36,6 +36,8 @@ struct ServerGame {
     int downloadCount = 0;
     double avgStars = 0;
     int reviewCount = 0;
+    QString downloadUrl;
+    QString storageType;
 };
 
 class GameGrid : public QWidget {
