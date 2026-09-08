@@ -163,11 +163,19 @@ void DownloadManager::onFinished() {
                             QJsonValue dataVal = obj["data"];
                             if (dataVal.isObject()) {
                                 QJsonObject dataObj = dataVal.toObject();
+                                qDebug() << "[DOWNLOAD] data keys:" << dataObj.keys();
                                 if (dataObj.contains("url")) realUrl = dataObj["url"].toString();
                                 else if (dataObj.contains("downloadUrl")) realUrl = dataObj["downloadUrl"].toString();
                                 else if (dataObj.contains("directUrl")) realUrl = dataObj["directUrl"].toString();
-                                else if (dataObj.contains("downloadPage")) {
-                                    qDebug() << "[DOWNLOAD] Gofile-style response. downloadPage:" << dataObj["downloadPage"].toString();
+                                else if (dataObj.contains("contentUrl")) realUrl = dataObj["contentUrl"].toString();
+                                else if (dataObj.contains("urlPlayout")) realUrl = dataObj["urlPlayout"].toString();
+                                else if (dataObj.contains("serverFileName")) {
+                                    QString server = dataObj.contains("server") ? dataObj["server"].toString() : "";
+                                    QString fileName = dataObj["serverFileName"].toString();
+                                    QString token = dataObj.contains("token") ? dataObj["token"].toString() : "";
+                                    if (!server.isEmpty() && !fileName.isEmpty()) {
+                                        realUrl = "https://" + server + ".gofile.io/downloadDirect/" + token + "/" + fileName;
+                                    }
                                 }
                             }
                         }

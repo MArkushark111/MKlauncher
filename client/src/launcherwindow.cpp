@@ -1426,6 +1426,37 @@ void LauncherWindow::onDownloadComplete(int gameId, const QString &filePath) {
     qDebug() << "[DOWNLOAD] Complete for game" << gameId << "File:" << filePath;
     QFileInfo fi(filePath);
     qDebug() << "[DOWNLOAD] File exists:" << fi.exists() << "Size:" << fi.size();
+
+    if (!fi.exists() || fi.size() < 1024) {
+        qDebug() << "[DOWNLOAD] File too small or missing, likely a redirect page";
+        QFile::remove(filePath);
+        m_progressBar->setVisible(false);
+        m_progressLabel->setText("");
+        QMessageBox::warning(this, "Download Error",
+            "Downloaded file is too small (" + QString::number(fi.size()) + " bytes). "
+            "The URL may require a browser or returned a redirect page.\n\n"
+            "Try using a direct download link instead.");
+        return;
+    }
+
+    QFile file(filePath);
+    if (file.open(QIODevice::ReadOnly)) {
+        QByteArray header = file.read(16);
+        file.close();
+        QString headerStr = QString::fromUtf8(header);
+        if (header.trimmed().startsWith("{") || header.trimmed().startsWith("<!") || header.trimmed().startsWith("<html")) {
+            qDebug() << "[DOWNLOAD] File is HTML/JSON, not an archive:" << header.left(50);
+            QFile::remove(filePath);
+            m_progressBar->setVisible(false);
+            m_progressLabel->setText("");
+            QMessageBox::warning(this, "Download Error",
+                "The downloaded file is not an archive (it looks like a web page or JSON).\n\n"
+                "The URL may have returned a redirect page instead of the actual file.\n"
+                "Try using a direct download link.");
+            return;
+        }
+    }
+
     m_progressLabel->setText("Extracting: " + m_currentDownloadName);
     m_progressBar->setValue(0);
 
