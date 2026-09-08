@@ -403,15 +403,14 @@ function renderBrowseTree(entries, sizeMB) {
     const container = document.getElementById('url-tree-container');
     const tree = document.getElementById('url-tree');
     container.style.display = 'block';
-    tree.innerHTML = '<div style="color:var(--accent);margin-bottom:8px;font-size:12px">Size: ' + sizeMB + ' MB | Click a .exe file to select it:</div>';
+    tree.innerHTML = '';
+    document.getElementById('selected-folder-label').textContent = 'none (click a folder)';
+    document.getElementById('selected-exe-label').textContent = 'none (click a .exe)';
 
-    const topLevel = entries.filter(e => !e.path.includes('/'));
-    const nested = entries.filter(e => e.path.includes('/'));
-
-    topLevel.forEach(entry => {
-        renderTreeItem(entry, tree, 0, entries);
-    });
-    nested.forEach(entry => {
+    const folders = entries.filter(e => e.isDir);
+    const files = entries.filter(e => !e.isDir);
+    const all = [...folders, ...files];
+    all.forEach(entry => {
         renderTreeItem(entry, tree, 0, entries);
     });
 }
@@ -425,21 +424,29 @@ function renderTreeItem(entry, parent, depth, allEntries) {
         div.textContent = '📁 ' + entry.name + '/';
         div.style.color = 'var(--text)';
         div.onmouseenter = () => div.style.background = 'rgba(0,255,136,0.1)';
-        div.onmouseleave = () => div.style.background = 'transparent';
+        div.onmouseleave = () => { if (!div.dataset.selected) div.style.background = 'transparent'; };
+        div.onclick = () => {
+            document.querySelectorAll('#url-tree div[data-type="folder"]').forEach(d => { d.style.background = 'transparent'; d.dataset.selected = ''; });
+            div.style.background = 'rgba(0,255,136,0.3)';
+            div.dataset.selected = '1';
+            const relPath = entry.path.split('::').pop() || entry.path;
+            document.getElementById('url-game-exe').value = '';
+            document.getElementById('selected-folder-label').textContent = relPath;
+            document.getElementById('selected-exe-label').textContent = 'none (click a .exe)';
+        };
+        div.dataset.type = 'folder';
         parent.appendChild(div);
 
         const children = allEntries.filter(e => {
-            const prefix = entry.path.split('::').pop() || entry.path;
-            const childPrefix = (e.path.split('::').pop() || e.path);
-            return childPrefix.startsWith(prefix + '/') && childPrefix !== prefix;
+            if (!e.isDir && e !== entry) {
+                const childPath = (e.path.split('::').pop() || e.path);
+                const parentPath = (entry.path.split('::').pop() || entry.path);
+                return childPath.startsWith(parentPath + '/') || childPath.startsWith(parentPath + '\\');
+            }
+            return false;
         });
         children.forEach(child => {
-            const relativePath = (child.path.split('::').pop() || child.path);
-            const slashCount = (relativePath.match(/\//g) || []).length;
-            const parentSlashCount = (prefix.match(/\//g) || []).length;
-            if (slashCount === parentSlashCount + 1) {
-                renderTreeItem(child, parent, depth + 1, allEntries);
-            }
+            renderTreeItem(child, parent, depth + 1, allEntries);
         });
     } else {
         const isExe = entry.name.toLowerCase().endsWith('.exe');
@@ -447,13 +454,17 @@ function renderTreeItem(entry, parent, depth, allEntries) {
         div.textContent = (isExe ? '🎮 ' : '📄 ') + entry.name + sizeStr;
         div.style.color = isExe ? 'var(--accent)' : 'var(--text)';
         div.onmouseenter = () => div.style.background = 'rgba(0,255,136,0.15)';
-        div.onmouseleave = () => div.style.background = 'transparent';
+        div.onmouseleave = () => { if (!div.dataset.selected) div.style.background = 'transparent'; };
         div.onclick = () => {
+            document.querySelectorAll('#url-tree div[data-type="exe"]').forEach(d => { d.style.background = 'transparent'; d.dataset.selected = ''; });
+            div.style.background = 'rgba(0,255,136,0.3)';
+            div.dataset.selected = '1';
+            div.dataset.type = 'exe';
             const fullPath = entry.path.split('::').pop() || entry.path;
             document.getElementById('url-game-exe').value = fullPath;
-            document.querySelectorAll('#url-tree div').forEach(d => d.style.background = 'transparent');
-            div.style.background = 'rgba(0,255,136,0.3)';
+            document.getElementById('selected-exe-label').textContent = entry.name;
         };
+        div.dataset.type = 'exe';
         parent.appendChild(div);
     }
 }
