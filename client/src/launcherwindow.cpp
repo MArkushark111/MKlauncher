@@ -2371,6 +2371,7 @@ void LauncherWindow::setupLibraryTab() {
     } else {
         for (const LocalGame &game : installedGames) {
             auto *card = new QWidget();
+            card->setMaximumWidth(600);
             card->setStyleSheet("background-color: #1a1a1a; border: 1px solid #2a2a2a; border-radius: 8px;");
             auto *cardLayout = new QVBoxLayout(card);
             cardLayout->setContentsMargins(16, 16, 16, 16);
@@ -2388,8 +2389,12 @@ void LauncherWindow::setupLibraryTab() {
             coverLbl->setAlignment(Qt::AlignCenter);
             if (!game.coverUrl.isEmpty()) {
                 QString url = game.coverUrl;
-                if (url.startsWith("storage/covers/")) url = url.mid(QString("storage/").length());
-                QNetworkRequest req(QUrl(m_serverUrl + "/" + url));
+                if (!url.startsWith("http")) {
+                    if (url.startsWith("storage/")) url = url.mid(QString("storage/").length());
+                    url = m_serverUrl + "/" + url;
+                }
+                QUrl coverUrlObj(url);
+                QNetworkRequest req(coverUrlObj);
                 req.setTransferTimeout(10000);
                 QNetworkReply *reply = m_reviewManager->get(req);
                 connect(reply, &QNetworkReply::finished, this, [coverLbl, reply]() {
@@ -2446,7 +2451,14 @@ void LauncherWindow::setupLibraryTab() {
             btnRowLayout->addStretch();
             cardLayout->addWidget(btnRow);
 
-            layout->addWidget(card);
+            auto *cardWrapper = new QWidget();
+            cardWrapper->setStyleSheet("background: transparent;");
+            auto *wrapperLayout = new QHBoxLayout(cardWrapper);
+            wrapperLayout->setContentsMargins(0, 0, 0, 0);
+            wrapperLayout->addStretch();
+            wrapperLayout->addWidget(card);
+            wrapperLayout->addStretch();
+            layout->addWidget(cardWrapper);
         }
     }
 
