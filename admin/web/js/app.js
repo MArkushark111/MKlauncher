@@ -312,6 +312,7 @@ function loadURLGameCategories() {
 function urlStepNext(step) {
     if (step === 2) {
         if (!document.getElementById('url-game-name').value.trim()) { alert('Enter game name'); return; }
+        if (document.getElementById('url-game-status').value === 'coming_soon') { step = 3; }
     }
     if (step === 4) {
         const urls = [];
@@ -341,7 +342,10 @@ function urlStepNext(step) {
     dots.forEach((d, idx) => { d.style.background = (idx < step) ? 'var(--accent)' : '#333'; });
 }
 
-function urlStepBack(step) { urlStepNext(step); }
+function urlStepBack(step) {
+    if (step === 2 && document.getElementById('url-game-status').value === 'coming_soon') { step = 1; }
+    urlStepNext(step);
+}
 
 function addUrlRow() {
     const list = document.getElementById('url-download-list');
