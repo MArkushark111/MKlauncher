@@ -1342,6 +1342,7 @@ func HandleAddCategory(w http.ResponseWriter, r *http.Request) {
 
 func HandleGetLauncherVersion(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
+	currentVersion := r.URL.Query().Get("current")
 	var id int
 	var version, changelog, filePath string
 	var fileSize int
@@ -1352,14 +1353,37 @@ func HandleGetLauncherVersion(w http.ResponseWriter, r *http.Request) {
 		json.NewEncoder(w).Encode(map[string]interface{}{"has_update": false})
 		return
 	}
+	hasUpdate := true
+	if currentVersion != "" && version != "" {
+		hasUpdate = compareVersions(version, currentVersion) > 0
+	}
 	json.NewEncoder(w).Encode(map[string]interface{}{
-		"has_update": true,
+		"has_update": hasUpdate,
 		"id":         id,
 		"version":    version,
 		"changelog":  changelog,
 		"file_size":  fileSize,
 		"created_at": createdAt,
 	})
+}
+
+func compareVersions(a, b string) int {
+	pa, pb := parseVersionParts(a), parseVersionParts(b)
+	for i := 0; i < 3; i++ {
+		if pa[i] > pb[i] { return 1 }
+		if pa[i] < pb[i] { return -1 }
+	}
+	return 0
+}
+
+func parseVersionParts(v string) [3]int {
+	var parts [3]int
+	v = strings.TrimPrefix(v, "v")
+	for i, s := range strings.SplitN(v, ".", 3) {
+		if i >= 3 { break }
+		fmt.Sscanf(s, "%d", &parts[i])
+	}
+	return parts
 }
 
 func HandleUploadLauncherUpdate(w http.ResponseWriter, r *http.Request) {

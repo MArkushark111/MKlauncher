@@ -2687,7 +2687,8 @@ void LauncherWindow::setupLibraryTab() {
 
 void LauncherWindow::checkForUpdates(bool manual) {
     if (m_serverUrl.isEmpty()) { if (manual) QMessageBox::information(this, "Update", "No server configured."); return; }
-    QNetworkRequest request{QUrl(m_serverUrl + "/api/launcher/version")};
+    QString currentVersion = QApplication::applicationVersion();
+    QNetworkRequest request{QUrl(m_serverUrl + "/api/launcher/version?current=" + currentVersion)};
     request.setTransferTimeout(10000);
     QNetworkAccessManager *mgr = new QNetworkAccessManager(this);
     QNetworkReply *reply = mgr->get(request);
@@ -2711,6 +2712,24 @@ void LauncherWindow::checkForUpdates(bool manual) {
         qDebug() << "[UPDATE] Server:" << serverVersion << "Local:" << currentVersion;
         if (serverVersion.isEmpty()) return;
         if (currentVersion == serverVersion) {
+            if (manual) QMessageBox::information(this, "Update", "You're up to date! (v" + currentVersion + ")");
+            return;
+        }
+        auto parseVersion = [](const QString &v) -> QList<int> {
+            QStringList parts = v.split(".");
+            QList<int> result;
+            for (const QString &p : parts) result.append(p.toInt());
+            while (result.size() < 3) result.append(0);
+            return result;
+        };
+        QList<int> serverParts = parseVersion(serverVersion);
+        QList<int> currentParts = parseVersion(currentVersion);
+        bool serverNewer = false;
+        for (int i = 0; i < 3; i++) {
+            if (serverParts[i] > currentParts[i]) { serverNewer = true; break; }
+            if (serverParts[i] < currentParts[i]) break;
+        }
+        if (!serverNewer) {
             if (manual) QMessageBox::information(this, "Update", "You're up to date! (v" + currentVersion + ")");
             return;
         }
