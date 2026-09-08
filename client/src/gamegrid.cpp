@@ -24,6 +24,7 @@ GameGrid::GameGrid(QWidget *parent) : QWidget(parent) {
     m_scrollArea->setFrameShape(QFrame::NoFrame);
 
     m_gridWidget = new QWidget();
+    m_gridWidget->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Preferred);
     m_grid = new QGridLayout(m_gridWidget);
     m_grid->setSpacing(16);
     m_grid->setContentsMargins(24, 24, 24, 24);
@@ -127,6 +128,12 @@ void GameGrid::buildGrid() {
         if (col >= cols) { col = 0; row++; }
         shown++;
     }
+
+    if (col > 0 && shown > 0) {
+        m_grid->addItem(new QSpacerItem(0, 0, QSizePolicy::Expanding, QSizePolicy::Minimum), row, col, 1, cols - col);
+    }
+
+    m_grid->addItem(new QSpacerItem(0, 0, QSizePolicy::Minimum, QSizePolicy::Expanding), row + 1, 0, 1, cols);
 
     if (shown == 0) {
         QLabel *emptyLabel = new QLabel(m_games.isEmpty() ? "No games available" : "No matching games");
