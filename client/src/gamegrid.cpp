@@ -179,39 +179,30 @@ QWidget* GameGrid::createGameCard(const ServerGame &game) {
     QWidget *infoWidget = new QWidget(card);
     infoWidget->setStyleSheet("background: transparent;");
     auto *infoLayout = new QVBoxLayout(infoWidget);
-    infoLayout->setContentsMargins(12, 8, 12, 8);
+    infoLayout->setContentsMargins(12, 8, 12, 4);
+    infoLayout->setSpacing(2);
 
     QLabel *nameLabel = new QLabel(game.name, infoWidget);
     nameLabel->setStyleSheet("color: #e0e0e0; font-weight: bold; font-size: 14px; background: transparent;");
     nameLabel->setWordWrap(true);
+    nameLabel->setMaximumHeight(36);
     infoLayout->addWidget(nameLabel);
 
     QLabel *metaLabel = new QLabel(
-        QString("v%1 | %2 | %3 downloads | %4 %5")
-            .arg(game.version, game.category.isEmpty() ? "N/A" : game.category)
-            .arg(game.downloadCount)
-            .arg(QString::number(game.avgStars, 'f', 1))
-            .arg(game.reviewCount == 0 ? "No reviews" : QString::number(game.reviewCount) + " reviews"),
+        QString("%1 | %2")
+            .arg(game.version)
+            .arg(game.category.isEmpty() ? "N/A" : game.category),
         infoWidget);
     metaLabel->setStyleSheet("color: #888888; font-size: 11px; background: transparent;");
     infoLayout->addWidget(metaLabel);
-
-    if (game.reviewCount > 0) {
-        QString stars;
-        int full = (int)game.avgStars;
-        for (int i = 0; i < full; i++) stars += QChar(0x2605);
-        for (int i = full; i < 5; i++) stars += QChar(0x2606);
-        QLabel *starLabel = new QLabel(stars, infoWidget);
-        starLabel->setStyleSheet("color: #ffaa00; font-size: 14px; background: transparent;");
-        infoLayout->addWidget(starLabel);
-    }
 
     layout->addWidget(infoWidget);
 
     QWidget *btnWidget = new QWidget(card);
     btnWidget->setStyleSheet("background: transparent;");
     auto *btnLayout = new QHBoxLayout(btnWidget);
-    btnLayout->setContentsMargins(12, 0, 12, 12);
+    btnLayout->setContentsMargins(12, 4, 12, 12);
+    btnLayout->setSpacing(8);
 
     LocalDB localDB;
     bool installed = localDB.isInstalled(game.id);
@@ -279,6 +270,7 @@ QWidget* GameGrid::createGameCard(const ServerGame &game) {
         btnLayout->addWidget(downloadBtn);
     }
 
+    btnLayout->addStretch();
     layout->addWidget(btnWidget);
 
     return card;

@@ -1661,6 +1661,7 @@ void LauncherWindow::showGameDetail(const ServerGame &game) {
     btnWidget->setStyleSheet("background: transparent;");
     auto *btnLayout = new QHBoxLayout(btnWidget);
     btnLayout->setContentsMargins(0, 0, 0, 0);
+    btnLayout->addStretch();
 
     if (installed) {
         LocalGame localGame = localDB.getGame(game.id);
@@ -2371,12 +2372,18 @@ void LauncherWindow::setupLibraryTab() {
         for (const LocalGame &game : installedGames) {
             auto *card = new QWidget();
             card->setStyleSheet("background-color: #1a1a1a; border: 1px solid #2a2a2a; border-radius: 8px;");
-            auto *cardLayout = new QHBoxLayout(card);
-            cardLayout->setContentsMargins(16, 12, 16, 12);
-            cardLayout->setSpacing(16);
+            auto *cardLayout = new QVBoxLayout(card);
+            cardLayout->setContentsMargins(16, 16, 16, 16);
+            cardLayout->setSpacing(12);
+
+            auto *topRow = new QWidget();
+            topRow->setStyleSheet("background: transparent;");
+            auto *topLayout = new QHBoxLayout(topRow);
+            topLayout->setContentsMargins(0, 0, 0, 0);
+            topLayout->setSpacing(16);
 
             auto *coverLbl = new QLabel();
-            coverLbl->setFixedSize(80, 80);
+            coverLbl->setFixedSize(100, 100);
             coverLbl->setStyleSheet("background-color: #111111; border-radius: 8px;");
             coverLbl->setAlignment(Qt::AlignCenter);
             if (!game.coverUrl.isEmpty()) {
@@ -2391,14 +2398,14 @@ void LauncherWindow::setupLibraryTab() {
                         QPixmap pixmap;
                         pixmap.loadFromData(reply->readAll());
                         if (!pixmap.isNull()) {
-                            coverLbl->setPixmap(pixmap.scaled(80, 80, Qt::KeepAspectRatioByExpanding, Qt::SmoothTransformation));
+                            coverLbl->setPixmap(pixmap.scaled(100, 100, Qt::KeepAspectRatioByExpanding, Qt::SmoothTransformation));
                         }
                     }
                 });
             } else {
                 coverLbl->setText("GAME");
             }
-            cardLayout->addWidget(coverLbl);
+            topLayout->addWidget(coverLbl);
 
             auto *infoLayout = new QVBoxLayout();
             infoLayout->setSpacing(4);
@@ -2416,19 +2423,28 @@ void LauncherWindow::setupLibraryTab() {
                 infoLayout->addWidget(playedLbl);
             }
             infoLayout->addStretch();
-            cardLayout->addLayout(infoLayout);
+            topLayout->addLayout(infoLayout);
+            topLayout->addStretch();
+            cardLayout->addWidget(topRow);
 
+            auto *btnRow = new QWidget();
+            btnRow->setStyleSheet("background: transparent;");
+            auto *btnRowLayout = new QHBoxLayout(btnRow);
+            btnRowLayout->setContentsMargins(0, 0, 0, 0);
+            btnRowLayout->addStretch();
             auto *playBtn = new QPushButton("PLAY");
             playBtn->setObjectName("playBtn");
             playBtn->setCursor(Qt::PointingHandCursor);
             playBtn->setStyleSheet(
-                "QPushButton#playBtn { background-color: #00ff88; color: #000000; border: none; border-radius: 6px; font-size: 14px; padding: 12px 32px; font-weight: bold; }"
+                "QPushButton#playBtn { background-color: #00ff88; color: #000000; border: none; border-radius: 6px; font-size: 14px; padding: 12px 48px; font-weight: bold; }"
                 "QPushButton#playBtn:hover { background-color: #00cc6a; }");
             connect(playBtn, &QPushButton::clicked, this, [this, game]() {
                 launchGame(game.exePath, game.installPath);
                 m_localDB->updateLastPlayed(game.serverGameId);
             });
-            cardLayout->addWidget(playBtn);
+            btnRowLayout->addWidget(playBtn);
+            btnRowLayout->addStretch();
+            cardLayout->addWidget(btnRow);
 
             layout->addWidget(card);
         }

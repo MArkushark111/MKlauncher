@@ -1,6 +1,7 @@
 [Setup]
 AppName=MKLauncher
 AppVersion=1.0.4
+AppVerName=MKLauncher
 AppPublisher=MKGames
 DefaultDirName={autopf}\MKLauncher
 DefaultGroupName=MKLauncher
