@@ -297,7 +297,7 @@ function uploadLauncherUpdate() {
     }).catch(e => alert('Upload failed: ' + e));
 }
 
-/* Add Game (URL) */
+/* Add Game (URL) - Multi-step wizard */
 function loadURLGameCategories() {
     api('GET', '/api/categories').then(data => {
         const sel = document.getElementById('url-game-category');
@@ -306,6 +306,54 @@ function loadURLGameCategories() {
             sel.innerHTML += `<option value="${c.name}">${c.icon} ${c.name}</option>`;
         });
     });
+    urlStepNext(1);
+}
+
+function urlStepNext(step) {
+    if (step === 2) {
+        if (!document.getElementById('url-game-name').value.trim()) { alert('Enter game name'); return; }
+    }
+    if (step === 4) {
+        const urls = [];
+        document.querySelectorAll('#url-download-list .url-row').forEach(row => {
+            const link = row.querySelector('.url-link-input').value.trim();
+            if (link) urls.push({ url: link, label: row.querySelector('.url-label-input').value.trim() || 'Mirror' });
+        });
+        if (urls.length === 0) { alert('Add at least one download URL'); return; }
+        if (!document.getElementById('url-game-exe').value.trim()) { alert('Enter exe path'); return; }
+        const summary = `
+            <b>Name:</b> ${document.getElementById('url-game-name').value}<br>
+            <b>Version:</b> ${document.getElementById('url-game-version').value || '1.0.0'}<br>
+            <b>Category:</b> ${document.getElementById('url-game-category').value}<br>
+            <b>Description:</b> ${document.getElementById('url-game-desc').value || 'N/A'}<br>
+            <b>Tags:</b> ${document.getElementById('url-game-tags').value || 'N/A'}<br>
+            <b>Download URLs:</b> ${urls.length} link(s)<br>${urls.map(u => `&nbsp;&nbsp;- ${u.label}: ${u.url}`).join('<br>')}<br>
+            <b>Exe Path:</b> ${document.getElementById('url-game-exe').value}<br>
+            <b>Cover:</b> ${document.getElementById('url-game-cover').files[0] ? document.getElementById('url-game-cover').files[0].name : 'None'}<br>
+            <b>Background:</b> ${document.getElementById('url-game-bg').files[0] ? document.getElementById('url-game-bg').files[0].name : 'None'}
+        `;
+        document.getElementById('url-confirm-summary').innerHTML = summary;
+    }
+    for (let i = 1; i <= 4; i++) {
+        document.getElementById('url-step-' + i).style.display = (i === step) ? 'block' : 'none';
+    }
+    const dots = document.querySelectorAll('#url-step-indicator .step-dot');
+    dots.forEach((d, idx) => { d.style.background = (idx < step) ? 'var(--accent)' : '#333'; });
+}
+
+function urlStepBack(step) { urlStepNext(step); }
+
+function addUrlRow() {
+    const list = document.getElementById('url-download-list');
+    const row = document.createElement('div');
+    row.className = 'url-row';
+    row.style.cssText = 'display:flex;gap:8px;margin-bottom:8px';
+    row.innerHTML = `
+        <input type="text" class="url-link-input" placeholder="https://example.com/mirror.zip" style="flex:3">
+        <input type="text" class="url-label-input" placeholder="Label" style="flex:1" value="Mirror">
+        <button class="btn" onclick="this.parentElement.remove()" style="padding:6px 12px">X</button>
+    `;
+    list.appendChild(row);
 }
 
 function addGameURL() {
@@ -314,17 +362,23 @@ function addGameURL() {
     const category = document.getElementById('url-game-category').value;
     const desc = document.getElementById('url-game-desc').value.trim();
     const tags = document.getElementById('url-game-tags').value.trim();
-    const download_url = document.getElementById('url-game-download').value.trim();
     const exe_path = document.getElementById('url-game-exe').value.trim();
-    if (!name || !download_url || !exe_path) { alert('Name, download URL, and exe path are required'); return; }
+    if (!name || !exe_path) { alert('Name and exe path are required'); return; }
+    const urls = [];
+    document.querySelectorAll('#url-download-list .url-row').forEach(row => {
+        const link = row.querySelector('.url-link-input').value.trim();
+        if (link) urls.push({ url: link, label: row.querySelector('.url-label-input').value.trim() || 'Mirror' });
+    });
+    if (urls.length === 0) { alert('Add at least one download URL'); return; }
     const formData = new FormData();
     formData.append('name', name);
     formData.append('version', version || '1.0.0');
     formData.append('category', category);
     formData.append('description', desc);
     formData.append('tags', tags);
-    formData.append('download_url', download_url);
+    formData.append('download_url', urls[0].url);
     formData.append('exe_path', exe_path);
+    if (urls.length > 1) formData.append('mirror_urls', JSON.stringify(urls.slice(1)));
     const coverFile = document.getElementById('url-game-cover').files[0];
     const bgFile = document.getElementById('url-game-bg').files[0];
     if (coverFile) formData.append('cover', coverFile);
@@ -338,9 +392,14 @@ function addGameURL() {
             document.getElementById('url-game-name').value = '';
             document.getElementById('url-game-desc').value = '';
             document.getElementById('url-game-tags').value = '';
-            document.getElementById('url-game-download').value = '';
             document.getElementById('url-game-exe').value = '';
-            alert('Game "' + name + '" added! (URL download, no server disk used)');
+            document.getElementById('url-download-list').innerHTML = `
+                <div class="url-row" style="display:flex;gap:8px;margin-bottom:8px">
+                    <input type="text" class="url-link-input" placeholder="https://example.com/game.zip" style="flex:3">
+                    <input type="text" class="url-label-input" placeholder="Label" style="flex:1" value="Main">
+                </div>`;
+            urlStepNext(1);
+            alert('Game "' + name + '" added with ' + urls.length + ' download link(s)!');
         } else {
             alert(data.error || 'Failed to add game');
         }

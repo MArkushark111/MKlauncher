@@ -313,6 +313,7 @@ func (d *Database) migrate() error {
 	d.Conn.Exec("ALTER TABLE games ADD COLUMN downloads INTEGER DEFAULT 0")
 	d.Conn.Exec("ALTER TABLE games ADD COLUMN download_url TEXT DEFAULT ''")
 	d.Conn.Exec("ALTER TABLE games ADD COLUMN storage_type TEXT DEFAULT 'disk'")
+	d.Conn.Exec("ALTER TABLE games ADD COLUMN mirror_urls TEXT DEFAULT ''")
 
 	var catCount int
 	d.Conn.QueryRow("SELECT COUNT(*) FROM categories").Scan(&catCount)
@@ -380,11 +381,11 @@ func (d *Database) AddGame(g *Game) error {
 	result, err := d.Conn.Exec(
 		`INSERT INTO games (name, description, version, category, tags, 
 		 cover_url, background_url, logo_url, wide_cover_url,
-		 archive_path, game_folder, exe_path, file_size, developer_id, is_public, download_url, storage_type)
-		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		 archive_path, game_folder, exe_path, file_size, developer_id, is_public, download_url, storage_type, mirror_urls)
+		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 		g.Name, g.Description, g.Version, g.Category, g.Tags,
 		g.CoverURL, g.BackgroundURL, g.LogoURL, g.WideCoverURL,
-		g.ArchivePath, g.GameFolder, g.ExePath, g.FileSize, g.DeveloperID, g.IsPublic, g.DownloadURL, g.StorageType,
+		g.ArchivePath, g.GameFolder, g.ExePath, g.FileSize, g.DeveloperID, g.IsPublic, g.DownloadURL, g.StorageType, g.MirrorURLs,
 	)
 	if err != nil {
 		return err
@@ -426,11 +427,11 @@ func (d *Database) GetGame(id int) (*Game, error) {
 		`SELECT id, name, description, version, category, tags,
 		 cover_url, background_url, logo_url, wide_cover_url,
 		 archive_path, game_folder, exe_path, file_size, download_count,
-		 created_at, updated_at FROM games WHERE id = ?`, id,
+		 created_at, updated_at, COALESCE(download_url,''), COALESCE(storage_type,'disk'), COALESCE(mirror_urls,'') FROM games WHERE id = ?`, id,
 	).Scan(&g.ID, &g.Name, &g.Description, &g.Version, &g.Category, &g.Tags,
 		&g.CoverURL, &g.BackgroundURL, &g.LogoURL, &g.WideCoverURL,
 		&g.ArchivePath, &g.GameFolder, &g.ExePath, &g.FileSize, &g.DownloadCount,
-		&g.CreatedAt, &g.UpdatedAt)
+		&g.CreatedAt, &g.UpdatedAt, &g.DownloadURL, &g.StorageType, &g.MirrorURLs)
 	if err != nil {
 		return nil, err
 	}
@@ -442,7 +443,7 @@ func (d *Database) ListGames() ([]Game, error) {
 		`SELECT id, name, description, version, category, tags,
 		 cover_url, background_url, logo_url, wide_cover_url,
 		 archive_path, game_folder, exe_path, file_size, download_count,
-		 created_at, updated_at FROM games ORDER BY name`)
+		 created_at, updated_at, COALESCE(download_url,''), COALESCE(storage_type,'disk'), COALESCE(mirror_urls,'') FROM games ORDER BY name`)
 	if err != nil {
 		return nil, err
 	}
@@ -454,7 +455,7 @@ func (d *Database) ListGames() ([]Game, error) {
 		rows.Scan(&g.ID, &g.Name, &g.Description, &g.Version, &g.Category, &g.Tags,
 			&g.CoverURL, &g.BackgroundURL, &g.LogoURL, &g.WideCoverURL,
 			&g.ArchivePath, &g.GameFolder, &g.ExePath, &g.FileSize, &g.DownloadCount,
-			&g.CreatedAt, &g.UpdatedAt)
+			&g.CreatedAt, &g.UpdatedAt, &g.DownloadURL, &g.StorageType, &g.MirrorURLs)
 		games = append(games, g)
 	}
 	return games, nil

@@ -263,49 +263,93 @@
                 <h2 class="tab-title">ADD GAME (FROM URL)</h2>
                 <div class="card">
                     <p style="color:var(--text-dim);margin-bottom:16px;font-size:13px">
-                        Game files are downloaded from an external URL. No server disk space used for game archives.
+                        Game files are downloaded from an external URL. No server disk space used.
                     </p>
-                    <div class="form-group">
-                        <label>GAME NAME</label>
-                        <input type="text" id="url-game-name" placeholder="My Game">
+                    <div id="url-step-indicator" style="display:flex;gap:8px;margin-bottom:20px">
+                        <span class="step-dot active" style="width:10px;height:10px;border-radius:50%;background:var(--accent)"></span>
+                        <span class="step-dot" style="width:10px;height:10px;border-radius:50%;background:#333"></span>
+                        <span class="step-dot" style="width:10px;height:10px;border-radius:50%;background:#333"></span>
+                        <span class="step-dot" style="width:10px;height:10px;border-radius:50%;background:#333"></span>
                     </div>
-                    <div class="form-row">
-                        <div class="form-group" style="flex:1">
-                            <label>VERSION</label>
-                            <input type="text" id="url-game-version" placeholder="1.0.0" value="1.0.0">
+
+                    <!-- Step 1: Game Info -->
+                    <div id="url-step-1">
+                        <h3 style="color:var(--text);margin-bottom:12px">Step 1: Game Info</h3>
+                        <div class="form-group">
+                            <label>GAME NAME</label>
+                            <input type="text" id="url-game-name" placeholder="My Game">
                         </div>
-                        <div class="form-group" style="flex:1">
-                            <label>CATEGORY</label>
-                            <select id="url-game-category"></select>
+                        <div class="form-row">
+                            <div class="form-group" style="flex:1">
+                                <label>VERSION</label>
+                                <input type="text" id="url-game-version" placeholder="1.0.0" value="1.0.0">
+                            </div>
+                            <div class="form-group" style="flex:1">
+                                <label>CATEGORY</label>
+                                <select id="url-game-category"></select>
+                            </div>
+                        </div>
+                        <div class="form-group">
+                            <label>DESCRIPTION</label>
+                            <textarea id="url-game-desc" placeholder="Game description..."></textarea>
+                        </div>
+                        <div class="form-group">
+                            <label>TAGS</label>
+                            <input type="text" id="url-game-tags" placeholder="action, multiplayer, co-op">
+                        </div>
+                        <button class="btn btn-primary" onclick="urlStepNext(2)">NEXT</button>
+                    </div>
+
+                    <!-- Step 2: Download URLs -->
+                    <div id="url-step-2" style="display:none">
+                        <h3 style="color:var(--text);margin-bottom:12px">Step 2: Download URLs</h3>
+                        <p style="color:var(--text-dim);margin-bottom:12px;font-size:12px">Add one or more download links (mirrors). At least one required.</p>
+                        <div id="url-download-list">
+                            <div class="url-row" style="display:flex;gap:8px;margin-bottom:8px">
+                                <input type="text" class="url-link-input" placeholder="https://example.com/game.zip" style="flex:3">
+                                <input type="text" class="url-label-input" placeholder="Label (e.g. Main)" style="flex:1" value="Main">
+                            </div>
+                        </div>
+                        <button class="btn" onclick="addUrlRow()" style="margin-bottom:12px">+ ADD MIRROR</button>
+                        <br>
+                        <div class="form-group">
+                            <label>EXE PATH (inside archive, or filename for .exe)</label>
+                            <input type="text" id="url-game-exe" placeholder="Game.exe">
+                        </div>
+                        <div style="display:flex;gap:8px">
+                            <button class="btn" onclick="urlStepBack(1)">BACK</button>
+                            <button class="btn btn-primary" onclick="urlStepNext(3)">NEXT</button>
                         </div>
                     </div>
-                    <div class="form-group">
-                        <label>DESCRIPTION</label>
-                        <textarea id="url-game-desc" placeholder="Game description..."></textarea>
-                    </div>
-                    <div class="form-group">
-                        <label>TAGS</label>
-                        <input type="text" id="url-game-tags" placeholder="action, multiplayer, co-op">
-                    </div>
-                    <div class="form-group">
-                        <label>DOWNLOAD URL (direct link to .zip or .exe)</label>
-                        <input type="text" id="url-game-download" placeholder="https://example.com/game.zip">
-                    </div>
-                    <div class="form-group">
-                        <label>EXE PATH (inside archive, or just filename for .exe)</label>
-                        <input type="text" id="url-game-exe" placeholder="Game.exe">
-                    </div>
-                    <div class="form-row">
-                        <div class="form-group" style="flex:1">
-                            <label>COVER IMAGE</label>
-                            <input type="file" id="url-game-cover" accept="image/*">
+
+                    <!-- Step 3: Images -->
+                    <div id="url-step-3" style="display:none">
+                        <h3 style="color:var(--text);margin-bottom:12px">Step 3: Images</h3>
+                        <div class="form-row">
+                            <div class="form-group" style="flex:1">
+                                <label>COVER IMAGE</label>
+                                <input type="file" id="url-game-cover" accept="image/*">
+                            </div>
+                            <div class="form-group" style="flex:1">
+                                <label>BACKGROUND IMAGE</label>
+                                <input type="file" id="url-game-bg" accept="image/*">
+                            </div>
                         </div>
-                        <div class="form-group" style="flex:1">
-                            <label>BACKGROUND IMAGE</label>
-                            <input type="file" id="url-game-bg" accept="image/*">
+                        <div style="display:flex;gap:8px">
+                            <button class="btn" onclick="urlStepBack(2)">BACK</button>
+                            <button class="btn btn-primary" onclick="urlStepNext(4)">NEXT</button>
                         </div>
                     </div>
-                    <button class="btn btn-primary" onclick="addGameURL()" style="margin-top:8px">ADD GAME FROM URL</button>
+
+                    <!-- Step 4: Confirm -->
+                    <div id="url-step-4" style="display:none">
+                        <h3 style="color:var(--text);margin-bottom:12px">Step 4: Confirm</h3>
+                        <div id="url-confirm-summary" style="background:#111;border-radius:8px;padding:16px;font-size:13px;line-height:2"></div>
+                        <div style="display:flex;gap:8px;margin-top:12px">
+                            <button class="btn" onclick="urlStepBack(3)">BACK</button>
+                            <button class="btn btn-primary" onclick="addGameURL()">ADD GAME</button>
+                        </div>
+                    </div>
                 </div>
             </div>
 

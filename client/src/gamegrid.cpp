@@ -77,6 +77,7 @@ void GameGrid::onGamesLoaded(QNetworkReply *reply) {
             game.reviewCount = obj["review_count"].toInt();
             game.downloadUrl = obj["download_url"].toString();
             game.storageType = obj["storage_type"].toString();
+            game.mirrorUrls = obj["mirror_urls"].toString();
             m_games.append(game);
         }
     }

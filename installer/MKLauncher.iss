@@ -1,6 +1,6 @@
 [Setup]
 AppName=MKLauncher
-AppVersion=1.0.0
+AppVersion=1.0.4
 AppPublisher=MKGames
 DefaultDirName={autopf}\MKLauncher
 DefaultGroupName=MKLauncher
@@ -37,15 +37,3 @@ Name: "desktopicon"; Description: "Create desktop shortcut"; GroupDescription: "
 
 [Run]
 Filename: "{app}\MKLauncher.exe"; Description: "Launch MKLauncher now"; Flags: nowait postinstall skipifsilent
-
-[Code]
-var
-  ResultCode: Integer;
-
-procedure CurStepChanged(CurStep: TSetupStep);
-begin
-  if CurStep = ssPostInstall then
-  begin
-    Exec(ExpandConstant('{app}\MKLauncher.exe'), '', '', SW_SHOW, ewNoWait, ResultCode);
-  end;
-end;

@@ -38,6 +38,7 @@ struct ServerGame {
     int reviewCount = 0;
     QString downloadUrl;
     QString storageType;
+    QString mirrorUrls;
 };
 
 class GameGrid : public QWidget {

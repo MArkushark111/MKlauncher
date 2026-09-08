@@ -232,6 +232,7 @@ func HandleAddGameURL(w http.ResponseWriter, r *http.Request) {
 		ExePath:     r.FormValue("exe_path"),
 		DownloadURL: r.FormValue("download_url"),
 		StorageType: "url",
+		MirrorURLs:  r.FormValue("mirror_urls"),
 	}
 	if game.Name == "" {
 		w.WriteHeader(http.StatusBadRequest)
