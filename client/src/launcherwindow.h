@@ -89,7 +89,6 @@ private:
     QString m_currentDownloadName;
     QString m_pendingArchivePath;
     QWidget *m_detailPage = nullptr;
-    QWidget *m_libraryPage = nullptr;
 
     // Feature tracking
     QTimer *m_playtimeTimer = nullptr;
@@ -126,7 +125,6 @@ private:
     void addDefenderExclusion(const QString &path);
     QString gameInstallPath(const QString &name);
     void showGameDetail(const ServerGame &game);
-    void setupLibraryTab();
     void checkWishlistNotifications();
     void setupNewsTab();
     void setupChatTab();
