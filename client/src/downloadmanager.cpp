@@ -1,6 +1,9 @@
 #include "downloadmanager.h"
 #include <QDir>
 #include <QFileInfo>
+#include <QJsonDocument>
+#include <QJsonObject>
+#include <QJsonArray>
 
 DownloadManager::DownloadManager(QObject *parent) : QObject(parent) {
     m_manager = new QNetworkAccessManager(this);
@@ -23,19 +26,12 @@ void DownloadManager::startDownload(int gameId, const QString &gameName, const Q
     task.info.active = true;
     task.info.paused = false;
     task.info.downloadedBytes = 0;
+    task.redirectPhase = true;
     task.elapsed.start();
-
-    task.file = new QFile(savePath, this);
-    if (!task.file->open(QIODevice::WriteOnly)) {
-        task.info.error = true;
-        task.info.errorMsg = "Cannot create file: " + savePath;
-        m_downloads[gameId] = task;
-        emit downloadError(gameId, task.info.errorMsg);
-        return;
-    }
 
     QNetworkRequest request(url);
     request.setTransferTimeout(30000);
+    request.setRawHeader("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36");
 
     task.reply = m_manager->get(request);
     connect(task.reply, &QNetworkReply::readyRead, this, &DownloadManager::onReadyRead);
@@ -86,8 +82,12 @@ void DownloadManager::onReadyRead() {
     if (!reply) return;
 
     for (auto it = m_downloads.begin(); it != m_downloads.end(); ++it) {
-        if (it.value().reply == reply && it.value().file) {
-            it.value().file->write(reply->readAll());
+        if (it.value().reply == reply) {
+            if (it.value().redirectPhase) {
+                it.value().redirectBuffer.append(reply->readAll());
+            } else if (it.value().file) {
+                it.value().file->write(reply->readAll());
+            }
             break;
         }
     }
@@ -131,18 +131,101 @@ void DownloadManager::onFinished() {
     for (auto it = m_downloads.begin(); it != m_downloads.end(); ++it) {
         if (it.value().reply == reply) {
             qDebug() << "[DOWNLOAD] Finished. Error:" << reply->errorString() << "HTTP:" << reply->attribute(QNetworkRequest::HttpStatusCodeAttribute);
-            if (reply->error() == QNetworkReply::NoError) {
-                it.value().file->flush();
-                it.value().file->close();
-                it.value().info.active = false;
-                qDebug() << "[DOWNLOAD] Saved to:" << it.value().info.savePath;
-                emit downloadComplete(it.key(), it.value().info.savePath);
-            } else if (reply->error() != QNetworkReply::OperationCanceledError) {
+
+            if (reply->error() != QNetworkReply::NoError && reply->error() != QNetworkReply::OperationCanceledError) {
                 qDebug() << "[DOWNLOAD] ERROR:" << reply->errorString();
                 it.value().info.error = true;
                 it.value().info.errorMsg = reply->errorString();
                 emit downloadError(it.key(), it.value().info.errorMsg);
+                reply->deleteLater();
+                if (it.value().file) it.value().file->deleteLater();
+                m_downloads.remove(it.key());
+                break;
             }
+
+            if (it.value().redirectPhase) {
+                QByteArray data = it.value().redirectBuffer;
+                it.value().redirectBuffer.clear();
+                reply->deleteLater();
+                it.value().reply = nullptr;
+
+                QString contentStr = QString::fromUtf8(data);
+                qDebug() << "[DOWNLOAD] Redirect phase. Response size:" << data.size() << "starts with:" << contentStr.left(100);
+
+                if (data.size() > 0 && (data[0] == '{' || data[0] == '[')) {
+                    QJsonDocument doc = QJsonDocument::fromJson(data);
+                    if (!doc.isNull()) {
+                        QJsonObject obj = doc.object();
+                        qDebug() << "[DOWNLOAD] JSON response keys:" << obj.keys();
+
+                        QString realUrl;
+                        if (obj.contains("data")) {
+                            QJsonValue dataVal = obj["data"];
+                            if (dataVal.isObject()) {
+                                QJsonObject dataObj = dataVal.toObject();
+                                if (dataObj.contains("url")) realUrl = dataObj["url"].toString();
+                                else if (dataObj.contains("downloadUrl")) realUrl = dataObj["downloadUrl"].toString();
+                                else if (dataObj.contains("directUrl")) realUrl = dataObj["directUrl"].toString();
+                                else if (dataObj.contains("downloadPage")) {
+                                    qDebug() << "[DOWNLOAD] Gofile-style response. downloadPage:" << dataObj["downloadPage"].toString();
+                                }
+                            }
+                        }
+                        if (realUrl.isEmpty() && obj.contains("url")) realUrl = obj["url"].toString();
+                        if (realUrl.isEmpty() && obj.contains("download_url")) realUrl = obj["download_url"].toString();
+
+                        if (!realUrl.isEmpty()) {
+                            qDebug() << "[DOWNLOAD] Follow redirect to:" << realUrl;
+                            it.value().info.url = realUrl;
+                            it.value().redirectPhase = true;
+
+                            QNetworkRequest newRequest{QUrl(realUrl)};
+                            newRequest.setTransferTimeout(120000);
+                            newRequest.setRawHeader("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36");
+                            it.value().reply = m_manager->get(newRequest);
+                            connect(it.value().reply, &QNetworkReply::readyRead, this, &DownloadManager::onReadyRead);
+                            connect(it.value().reply, &QNetworkReply::downloadProgress, this, &DownloadManager::onDownloadProgress);
+                            connect(it.value().reply, &QNetworkReply::finished, this, &DownloadManager::onFinished);
+                            connect(it.value().reply, &QNetworkReply::errorOccurred, this, &DownloadManager::onError);
+                            break;
+                        }
+                    }
+                }
+
+                qDebug() << "[DOWNLOAD] Not JSON redirect, treating as direct file response. Size:" << data.size();
+                it.value().redirectPhase = false;
+
+                QFileInfo fi(it.value().info.savePath);
+                QDir().mkpath(fi.absolutePath());
+                it.value().file = new QFile(it.value().info.savePath, this);
+                if (!it.value().file->open(QIODevice::WriteOnly)) {
+                    it.value().info.error = true;
+                    it.value().info.errorMsg = "Cannot create file: " + it.value().info.savePath;
+                    emit downloadError(it.key(), it.value().info.errorMsg);
+                    m_downloads.remove(it.key());
+                    break;
+                }
+                it.value().file->write(data);
+
+                QNetworkRequest newRequest{QUrl(it.value().info.url)};
+                newRequest.setTransferTimeout(120000);
+                newRequest.setRawHeader("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36");
+                it.value().reply = m_manager->get(newRequest);
+                connect(it.value().reply, &QNetworkReply::readyRead, this, &DownloadManager::onReadyRead);
+                connect(it.value().reply, &QNetworkReply::downloadProgress, this, &DownloadManager::onDownloadProgress);
+                connect(it.value().reply, &QNetworkReply::finished, this, &DownloadManager::onFinished);
+                connect(it.value().reply, &QNetworkReply::errorOccurred, this, &DownloadManager::onError);
+                break;
+            }
+
+            if (it.value().file) {
+                it.value().file->flush();
+                it.value().file->close();
+            }
+            it.value().info.active = false;
+            qDebug() << "[DOWNLOAD] Saved to:" << it.value().info.savePath;
+            emit downloadComplete(it.key(), it.value().info.savePath);
+
             reply->deleteLater();
             if (it.value().file) it.value().file->deleteLater();
             m_downloads.remove(it.key());

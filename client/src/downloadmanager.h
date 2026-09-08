@@ -65,6 +65,8 @@ private:
         QElapsedTimer elapsed;
         qint64 lastBytes = 0;
         double currentSpeed = 0;
+        bool redirectPhase = true;
+        QByteArray redirectBuffer;
     };
 
     QNetworkAccessManager *m_manager;

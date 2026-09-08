@@ -1360,7 +1360,12 @@ void LauncherWindow::stopRunningGame() {
 }
 
 void LauncherWindow::onGameDownload(int gameId, const QString &name, const QString &url, qint64 size) {
-    QString savePath = gameInstallPath(name) + ".zip";
+    QString ext = ".zip";
+    QString lowerUrl = url.toLower();
+    if (lowerUrl.contains(".rar")) ext = ".rar";
+    else if (lowerUrl.contains(".7z")) ext = ".7z";
+    else if (lowerUrl.contains(".tar.gz") || lowerUrl.contains(".tgz")) ext = ".tar.gz";
+    QString savePath = gameInstallPath(name) + ext;
     m_currentDownloadGameId = gameId;
     m_currentDownloadName = name;
     qDebug() << "[DOWNLOAD] Starting download:" << name << "URL:" << url << "Save:" << savePath << "Size:" << size;
