@@ -1306,6 +1306,8 @@ void LauncherWindow::refreshGames() {
 }
 
 void LauncherWindow::onGamePlay(int gameId, const QString &name, const QString &exePath, const QString &installPath) {
+    m_runningGameId = gameId;
+    m_runningGameName = name;
     startPlaytimeTracking(gameId);
     launchGame(exePath, installPath);
     m_localDB->updateLastPlayed(gameId);
@@ -1326,11 +1328,47 @@ void LauncherWindow::launchGame(const QString &exePath, const QString &installPa
         }
     }
 
-#ifdef Q_OS_WIN
-    QProcess::startDetached("cmd", {"/c", "start", "", QDir::toNativeSeparators(fullPath)});
-#else
-    QDesktopServices::openUrl(QUrl::fromLocalFile(fullPath));
-#endif
+    if (m_runningProcess) {
+        QMessageBox::warning(this, "Game Running", "A game is already running. Stop it first.");
+        return;
+    }
+
+    m_runningProcess = new QProcess(this);
+    connect(m_runningProcess, &QProcess::finished, this, &LauncherWindow::onGameProcessFinished);
+    m_runningProcess->setWorkingDirectory(installPath);
+    m_runningProcess->start("cmd", {"/c", "start", "", QDir::toNativeSeparators(fullPath)});
+
+    if (m_detailPlayBtn) {
+        m_detailPlayBtn->setText("STOP");
+        m_detailPlayBtn->setStyleSheet(
+            "QPushButton#playBtn { background-color: #ff4444; color: #ffffff; border: none; border-radius: 6px; font-size: 16px; padding: 14px 48px; font-weight: bold; }"
+            "QPushButton#playBtn:hover { background-color: #cc3333; }");
+    }
+}
+
+void LauncherWindow::onGameProcessFinished(int exitCode, QProcess::ExitStatus exitStatus) {
+    Q_UNUSED(exitCode);
+    Q_UNUSED(exitStatus);
+    qDebug() << "[GAME] Process finished, code:" << exitCode;
+    stopPlaytimeTracking();
+    m_runningGameId = 0;
+    m_runningGameName.clear();
+    m_runningProcess->deleteLater();
+    m_runningProcess = nullptr;
+    if (m_detailPlayBtn) {
+        m_detailPlayBtn->setText("PLAY");
+        m_detailPlayBtn->setStyleSheet(
+            "QPushButton#playBtn { background-color: #00ff88; color: #000000; border: none; border-radius: 6px; font-size: 16px; padding: 14px 48px; font-weight: bold; }"
+            "QPushButton#playBtn:hover { background-color: #00cc6a; }");
+    }
+    showNotification("MKLauncher", "Game closed");
+}
+
+void LauncherWindow::stopRunningGame() {
+    if (m_runningProcess && m_runningProcess->state() != QProcess::NotRunning) {
+        m_runningProcess->kill();
+        m_runningProcess->waitForFinished(3000);
+    }
 }
 
 void LauncherWindow::onGameDownload(int gameId, const QString &name, const QString &url, qint64 size) {
@@ -1666,17 +1704,34 @@ void LauncherWindow::showGameDetail(const ServerGame &game) {
     if (installed) {
         LocalGame localGame = localDB.getGame(game.id);
         bool needsUpdate = localGame.version != game.version;
+        bool isRunning = (m_runningGameId == game.id);
 
-        auto *playBtn = new QPushButton("PLAY");
-        playBtn->setObjectName("playBtn");
-        playBtn->setCursor(Qt::PointingHandCursor);
-        playBtn->setStyleSheet(
-            "QPushButton#playBtn { background-color: #00ff88; color: #000000; border: none; border-radius: 6px; font-size: 16px; padding: 14px 48px; font-weight: bold; }"
-            "QPushButton#playBtn:hover { background-color: #00cc6a; }");
-        connect(playBtn, &QPushButton::clicked, [this, game, localGame]() {
-            emit m_gameGrid->gamePlay(game.id, game.name, game.exePath, localGame.installPath);
+        m_detailPlayBtn = new QPushButton(isRunning ? "STOP" : "PLAY");
+        m_detailPlayBtn->setObjectName("playBtn");
+        m_detailPlayBtn->setCursor(Qt::PointingHandCursor);
+        if (isRunning) {
+            m_detailPlayBtn->setStyleSheet(
+                "QPushButton#playBtn { background-color: #ff4444; color: #ffffff; border: none; border-radius: 6px; font-size: 16px; padding: 14px 48px; font-weight: bold; }"
+                "QPushButton#playBtn:hover { background-color: #cc3333; }");
+        } else {
+            m_detailPlayBtn->setStyleSheet(
+                "QPushButton#playBtn { background-color: #00ff88; color: #000000; border: none; border-radius: 6px; font-size: 16px; padding: 14px 48px; font-weight: bold; }"
+                "QPushButton#playBtn:hover { background-color: #00cc6a; }");
+        }
+        connect(m_detailPlayBtn, &QPushButton::clicked, this, [this, game, localGame, isRunning]() {
+            if (isRunning) {
+                stopRunningGame();
+            } else {
+                m_runningGameId = game.id;
+                m_runningGameName = game.name;
+                m_detailPlayBtn->setText("STOP");
+                m_detailPlayBtn->setStyleSheet(
+                    "QPushButton#playBtn { background-color: #ff4444; color: #ffffff; border: none; border-radius: 6px; font-size: 16px; padding: 14px 48px; font-weight: bold; }"
+                    "QPushButton#playBtn:hover { background-color: #cc3333; }");
+                emit m_gameGrid->gamePlay(game.id, game.name, game.exePath, localGame.installPath);
+            }
         });
-        btnLayout->addWidget(playBtn);
+        btnLayout->addWidget(m_detailPlayBtn);
 
         if (needsUpdate) {
             auto *updateBtn = new QPushButton("UPDATE");
@@ -1728,6 +1783,29 @@ void LauncherWindow::showGameDetail(const ServerGame &game) {
         toggleWishlist(game.id);
     });
     btnLayout->addWidget(wishlistBtn);
+
+    if (installed) {
+        auto *reportBtn = new QPushButton("REPORT PROBLEM");
+        reportBtn->setObjectName("reportBtn");
+        reportBtn->setCursor(Qt::PointingHandCursor);
+        reportBtn->setStyleSheet(
+            "QPushButton#reportBtn { background-color: transparent; color: #ff8844; border: 1px solid #ff8844; "
+            "border-radius: 6px; font-size: 12px; padding: 14px 20px; font-weight: bold; }"
+            "QPushButton#reportBtn:hover { background-color: #ff8844; color: #000000; }");
+        connect(reportBtn, &QPushButton::clicked, this, [this, game]() {
+            if (m_userToken.isEmpty()) {
+                QMessageBox::warning(this, "Login Required", "You must be logged in to report a problem.");
+                return;
+            }
+            bool ok;
+            QString desc = QInputDialog::getMultiLineText(this, "Report a Problem",
+                "Describe the issue with " + game.name + ":", "", &ok);
+            if (ok && !desc.trimmed().isEmpty()) {
+                submitReport(game.id, game.name, desc.trimmed());
+            }
+        });
+        btnLayout->addWidget(reportBtn);
+    }
 
     btnLayout->addStretch();
     layout->addWidget(btnWidget);
@@ -2533,6 +2611,27 @@ void LauncherWindow::checkForUpdates(bool manual) {
                     QApplication::quit();
                 }
             });
+        }
+    });
+}
+
+void LauncherWindow::submitReport(int gameId, const QString &gameName, const QString &description) {
+    QJsonObject obj;
+    obj["game_id"] = gameId;
+    obj["game_name"] = gameName;
+    obj["description"] = description;
+    QNetworkRequest request(QUrl(m_serverUrl + "/api/reports"));
+    request.setHeader(QNetworkRequest::ContentTypeHeader, "application/json");
+    request.setRawHeader("Authorization", "Bearer " + m_userToken.toUtf8());
+    request.setTransferTimeout(10000);
+    QNetworkReply *reply = m_authManager->post(request, QJsonDocument(obj).toJson());
+    connect(reply, &QNetworkReply::finished, this, [this, reply, gameName]() {
+        reply->deleteLater();
+        QJsonDocument doc = QJsonDocument::fromJson(reply->readAll());
+        if (reply->error() == QNetworkReply::NoError && doc.object()["success"].toBool()) {
+            QMessageBox::information(this, "Report Sent", "Your report for \"" + gameName + "\" has been submitted. Thank you!");
+        } else {
+            QMessageBox::warning(this, "Report Failed", doc.object()["error"].toString());
         }
     });
 }

@@ -315,6 +315,18 @@ func (d *Database) migrate() error {
 	d.Conn.Exec("ALTER TABLE games ADD COLUMN storage_type TEXT DEFAULT 'disk'")
 	d.Conn.Exec("ALTER TABLE games ADD COLUMN mirror_urls TEXT DEFAULT ''")
 
+	d.Conn.Exec(`CREATE TABLE IF NOT EXISTS reports (
+		id INTEGER PRIMARY KEY AUTOINCREMENT,
+		user_id INTEGER NOT NULL,
+		username TEXT NOT NULL,
+		game_id INTEGER NOT NULL,
+		game_name TEXT NOT NULL,
+		description TEXT NOT NULL,
+		status TEXT DEFAULT 'open',
+		admin_reply TEXT DEFAULT '',
+		created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+	)`)
+
 	var catCount int
 	d.Conn.QueryRow("SELECT COUNT(*) FROM categories").Scan(&catCount)
 	if catCount == 0 {

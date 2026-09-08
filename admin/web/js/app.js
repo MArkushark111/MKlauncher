@@ -406,6 +406,45 @@ function addGameURL() {
     }).catch(e => alert('Error: ' + e));
 }
 
+function loadReportsAdmin() {
+    api('GET', '/api/reports').then(data => {
+        const list = document.getElementById('reports-list');
+        if (!data || data.length === 0) {
+            list.innerHTML = '<p style="color:var(--text-dim)">No reports yet</p>';
+            return;
+        }
+        list.innerHTML = '';
+        data.forEach(r => {
+            const statusColor = r.status === 'open' ? '#ff4444' : r.status === 'replied' ? '#00ff88' : '#ffaa00';
+            list.innerHTML += `
+                <div style="background:#111;border:1px solid #2a2a2a;border-radius:8px;padding:16px;margin-bottom:12px">
+                    <div style="display:flex;justify-content:space-between;margin-bottom:8px">
+                        <span style="color:#00ff88;font-weight:bold">${r.game_name}</span>
+                        <span style="color:${statusColor};font-size:12px;text-transform:uppercase">${r.status}</span>
+                    </div>
+                    <p style="color:#888;font-size:12px;margin:4px 0">By ${r.username} | ${r.created_at}</p>
+                    <p style="color:#ccc;font-size:13px;margin:8px 0">${r.description}</p>
+                    ${r.admin_reply ? `<p style="color:#00ff88;font-size:12px;margin:8px 0"><b>Reply:</b> ${r.admin_reply}</p>` : ''}
+                    <div style="display:flex;gap:8px;margin-top:8px">
+                        <input type="text" id="report-reply-${r.id}" placeholder="Admin reply..." style="flex:1;padding:6px 10px;background:#1a1a1a;border:1px solid #333;border-radius:4px;color:#e0e0e0;font-size:12px">
+                        <button class="btn btn-sm" onclick="replyReport(${r.id})" style="padding:6px 12px;font-size:12px">REPLY</button>
+                        <button class="btn btn-sm" onclick="resolveReport(${r.id})" style="padding:6px 12px;font-size:12px;background:#00ff88;color:#000">RESOLVED</button>
+                    </div>
+                </div>`;
+        });
+    });
+}
+
+function replyReport(id) {
+    const reply = document.getElementById('report-reply-' + id).value.trim();
+    if (!reply) { alert('Enter a reply'); return; }
+    api('POST', '/api/admin/reports/reply', { report_id: id, reply: reply, status: 'replied' }).then(() => loadReportsAdmin());
+}
+
+function resolveReport(id) {
+    api('POST', '/api/admin/reports/reply', { report_id: id, reply: '', status: 'resolved' }).then(() => loadReportsAdmin());
+}
+
 function logout() {
     authToken = '';
     localStorage.removeItem('mk_token');
@@ -436,6 +475,7 @@ function showTab(tab, event) {
         case 'featured': loadFeaturedAdmin(); break;
         case 'mods': loadModsAdmin(); break;
         case 'servers': loadServersAdmin(); break;
+        case 'reports': loadReportsAdmin(); break;
         case 'launcher': loadLauncherAdmin(); break;
         case 'config': loadConfig(); break;
         case 'notifications': loadNotifications(); break;

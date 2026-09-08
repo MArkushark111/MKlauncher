@@ -66,6 +66,9 @@
                 <li class="nav-item" onclick="showTab('servers', event)">
                     <span class="nav-icon">&#127760;</span> Servers
                 </li>
+                <li class="nav-item" onclick="showTab('reports', event)">
+                    <span class="nav-icon">&#128196;</span> Reports
+                </li>
                 <li class="nav-item" onclick="showTab('launcher', event)">
                     <span class="nav-icon">&#128225;</span> Launcher
                 </li>
@@ -526,6 +529,13 @@
                 <div class="card">
                     <h3>ALL SERVERS</h3>
                     <div id="servers-list"></div>
+                </div>
+            </div>
+
+            <div id="tab-reports" class="tab hidden">
+                <h2 class="tab-title">USER REPORTS</h2>
+                <div class="card">
+                    <div id="reports-list"></div>
                 </div>
             </div>
 

@@ -1408,3 +1408,80 @@ func HandleDownloadLauncherUpdate(w http.ResponseWriter, r *http.Request) {
 	}
 	http.NotFound(w, r)
 }
+
+func HandleSubmitReport(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	var req struct {
+		GameID      int    `json:"game_id"`
+		GameName    string `json:"game_name"`
+		Description string `json:"description"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(map[string]string{"error": "Invalid request"})
+		return
+	}
+	if req.Description == "" {
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(map[string]string{"error": "Description required"})
+		return
+	}
+	userID := r.Header.Get("X-User-ID")
+	if userID == "" {
+		w.WriteHeader(http.StatusUnauthorized)
+		json.NewEncoder(w).Encode(map[string]string{"error": "Login required"})
+		return
+	}
+	uid, _ := strconv.Atoi(userID)
+	var username string
+	db.DB.Conn.QueryRow("SELECT username FROM users WHERE id=?", uid).Scan(&username)
+	if username == "" {
+		username = "user_" + userID
+	}
+	db.DB.Conn.Exec("INSERT INTO reports (user_id, username, game_id, game_name, description) VALUES (?, ?, ?, ?, ?)",
+		uid, username, req.GameID, req.GameName, req.Description)
+	log.Printf("[API] Report submitted by %s for game %s", username, req.GameName)
+	json.NewEncoder(w).Encode(map[string]interface{}{"success": true})
+}
+
+func HandleListReports(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	rows, err := db.DB.Conn.Query("SELECT id, user_id, username, game_id, game_name, description, status, admin_reply, created_at FROM reports ORDER BY id DESC")
+	if err != nil {
+		json.NewEncoder(w).Encode([]interface{}{})
+		return
+	}
+	defer rows.Close()
+	var reports []map[string]interface{}
+	for rows.Next() {
+		var id, uid, gameID int
+		var username, gameName, desc, status, adminReply, createdAt string
+		rows.Scan(&id, &uid, &username, &gameID, &gameName, &desc, &status, &adminReply, &createdAt)
+		reports = append(reports, map[string]interface{}{
+			"id": id, "user_id": uid, "username": username, "game_id": gameID,
+			"game_name": gameName, "description": desc, "status": status,
+			"admin_reply": adminReply, "created_at": createdAt,
+		})
+	}
+	if reports == nil {
+		reports = []map[string]interface{}{}
+	}
+	json.NewEncoder(w).Encode(reports)
+}
+
+func HandleReplyReport(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	var req struct {
+		ReportID int    `json:"report_id"`
+		Reply    string `json:"reply"`
+		Status   string `json:"status"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(map[string]string{"error": "Invalid request"})
+		return
+	}
+	if req.Status == "" { req.Status = "replied" }
+	db.DB.Conn.Exec("UPDATE reports SET admin_reply=?, status=? WHERE id=?", req.Reply, req.Status, req.ReportID)
+	json.NewEncoder(w).Encode(map[string]interface{}{"success": true})
+}

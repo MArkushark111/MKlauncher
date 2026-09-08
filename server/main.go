@@ -173,6 +173,10 @@ func main() {
 	router.HandleFunc("/api/launcher/download", api.HandleDownloadLauncherUpdate).Methods("GET")
 	router.HandleFunc("/api/admin/launcher/upload", api.RequireAuth(api.HandleUploadLauncherUpdate)).Methods("POST")
 
+	router.HandleFunc("/api/reports", api.RequireAuth(api.HandleSubmitReport)).Methods("POST")
+	router.HandleFunc("/api/reports", api.RequireAuth(api.HandleListReports)).Methods("GET")
+	router.HandleFunc("/api/admin/reports/reply", api.RequireAuth(api.HandleReplyReport)).Methods("POST")
+
 	router.PathPrefix("/covers/").HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		coversDir := filepath.Join(StorageDir, "covers")
 		fileName := strings.TrimPrefix(r.URL.Path, "/covers/")

@@ -13,6 +13,8 @@
 #include <QSystemTrayIcon>
 #include <QTimer>
 #include <QTextEdit>
+#include <QProcess>
+#include <QInputDialog>
 
 #include "gamegrid.h"
 #include "downloadmanager.h"
@@ -93,6 +95,12 @@ private:
     QTimer *m_playtimeTimer = nullptr;
     int m_currentGameId = 0;
 
+    // Running game tracking
+    QProcess *m_runningProcess = nullptr;
+    int m_runningGameId = 0;
+    QString m_runningGameName;
+    QPushButton *m_detailPlayBtn = nullptr;
+
     // Chat
     QWidget *m_chatPage = nullptr;
     QTextEdit *m_chatMessages = nullptr;
@@ -136,6 +144,9 @@ private:
     void loadLeaderboard(int gameId);
     void loadAchievements(int gameId);
     void loadScreenshots(int gameId);
+    void stopRunningGame();
+    void onGameProcessFinished(int exitCode, QProcess::ExitStatus exitStatus);
+    void submitReport(int gameId, const QString &gameName, const QString &description);
 };
 
 #endif
