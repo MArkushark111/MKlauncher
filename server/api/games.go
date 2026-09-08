@@ -236,6 +236,11 @@ func HandleAddGameURL(w http.ResponseWriter, r *http.Request) {
 		MirrorURLs:  r.FormValue("mirror_urls"),
 		Status:      r.FormValue("status"),
 	}
+	if fs := r.FormValue("file_size"); fs != "" {
+		if fsInt, err := strconv.ParseInt(fs, 10, 64); err == nil {
+			game.FileSize = fsInt
+		}
+	}
 	if game.Name == "" {
 		w.WriteHeader(http.StatusBadRequest)
 		json.NewEncoder(w).Encode(map[string]string{"error": "Game name required"})

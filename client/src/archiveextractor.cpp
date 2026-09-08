@@ -108,21 +108,28 @@ bool ArchiveExtractor::extractZip(const QString &archive, const QString &dest) {
 bool ArchiveExtractor::extractRar(const QString &archive, const QString &dest) {
     m_process = new QProcess(this);
     connect(m_process, &QProcess::readyReadStandardOutput, this, &ArchiveExtractor::onProcessReadyRead);
+    connect(m_process, &QProcess::readyReadStandardError, this, &ArchiveExtractor::onProcessReadyRead);
     connect(m_process, &QProcess::finished, this, &ArchiveExtractor::onProcessFinished);
 
     QStringList args;
 #ifdef Q_OS_WIN
     QString tool = findTool("unrar");
-    args << "x" << "-o+" << "-y" << archive << dest;
+    if (tool == "unrar") {
+        tool = findTool("7z");
+        args << "x" << "-y" << ("-o" + dest) << archive;
+    } else {
+        args << "x" << "-o+" << "-y" << archive << dest;
+    }
 #else
     QString tool = "unrar";
     args << "x" << "-o+" << "-y" << archive << dest;
 #endif
+    qDebug() << "[EXTRACTOR] Running:" << tool << args.join(" ");
     m_process->start(tool, args);
 
     if (!m_process->waitForStarted()) {
         m_extracting = false;
-        emit extractionError("Failed to start unrar. Install with: sudo apt install unrar");
+        emit extractionError("Failed to start unrar/7z. Install 7-Zip, WinRAR, or run: sudo apt install unrar");
         m_process->deleteLater();
         m_process = nullptr;
         return false;

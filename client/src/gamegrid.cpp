@@ -96,6 +96,9 @@ void GameGrid::buildGrid() {
     }
 
     int cols = 4;
+    for (int i = 0; i < cols; i++) {
+        m_grid->setColumnStretch(i, 0);
+    }
     int row = 0, col = 0;
     int shown = 0;
 
@@ -131,8 +134,6 @@ void GameGrid::buildGrid() {
         emptyLabel->setStyleSheet("color: #555555; font-size: 16px; padding: 60px;");
         m_grid->addWidget(emptyLabel, 0, 0, 1, cols);
     }
-
-    m_grid->addItem(new QSpacerItem(20, 20, QSizePolicy::Expanding, QSizePolicy::Expanding), row + 1, 0);
 }
 
 QWidget* GameGrid::createGameCard(const ServerGame &game) {

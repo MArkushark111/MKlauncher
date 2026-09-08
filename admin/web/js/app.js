@@ -385,6 +385,8 @@ function addGameURL() {
     formData.append('download_url', urls[0].url);
     formData.append('exe_path', exe_path);
     formData.append('status', document.getElementById('url-game-status').value);
+    const fileSizeMB = parseFloat(document.getElementById('url-game-size').value) || 0;
+    formData.append('file_size', String(Math.round(fileSizeMB * 1024 * 1024)));
     if (urls.length > 1) formData.append('mirror_urls', JSON.stringify(urls.slice(1)));
     const coverFile = document.getElementById('url-game-cover').files[0];
     const bgFile = document.getElementById('url-game-bg').files[0];
