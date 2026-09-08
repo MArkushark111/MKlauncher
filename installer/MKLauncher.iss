@@ -1,6 +1,6 @@
 [Setup]
 AppName=MKLauncher
-AppVersion=1.0.4
+AppVersion=1.0.5
 AppVerName=MKLauncher
 AppPublisher=MKGames
 DefaultDirName={autopf}\MKLauncher
@@ -31,10 +31,10 @@ Source: "C:\Users\Mark\Music\mkgames_\client\build\translations\*"; DestDir: "{a
 [Icons]
 Name: "{group}\MKLauncher"; Filename: "{app}\MKLauncher.exe"; IconFilename: "{app}\MKLauncher.exe"
 Name: "{group}\Uninstall MKLauncher"; Filename: "{uninstallexe}"
-Name: "{autodesktop}\MKLauncher"; Filename: "{app}\MKLauncher.exe"; Tasks: desktopicon
+Name: "{autodesktop}\MKLauncher"; Filename: "{app}\MKLauncher.exe"; IconFilename: "{app}\MKLauncher.exe"; Tasks: desktopicon
 
 [Tasks]
-Name: "desktopicon"; Description: "Create desktop shortcut"; GroupDescription: "Additional icons:"; Flags: unchecked
+Name: "desktopicon"; Description: "Create desktop shortcut"; GroupDescription: "Additional icons:"
 
 [Run]
 Filename: "{app}\MKLauncher.exe"; Description: "Launch MKLauncher now"; Flags: nowait postinstall skipifsilent
