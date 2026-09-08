@@ -39,6 +39,7 @@ struct ServerGame {
     QString downloadUrl;
     QString storageType;
     QString mirrorUrls;
+    QString status;
 };
 
 class GameGrid : public QWidget {

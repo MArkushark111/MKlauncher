@@ -593,12 +593,19 @@ func HandleToggleWishlist(w http.ResponseWriter, r *http.Request) {
 		json.NewEncoder(w).Encode(map[string]string{"error": "Invalid game ID"})
 		return
 	}
+	var gameStatus string
+	db.DB.Conn.QueryRow("SELECT COALESCE(status,'released') FROM games WHERE id=?", gameID).Scan(&gameStatus)
+	if gameStatus == "" { gameStatus = "released" }
 	var exists int
 	db.DB.Conn.QueryRow("SELECT COUNT(*) FROM wishlist WHERE user_id = ? AND game_id = ?", userID, gameID).Scan(&exists)
 	if exists > 0 {
 		db.DB.Conn.Exec("DELETE FROM wishlist WHERE user_id = ? AND game_id = ?", userID, gameID)
 		json.NewEncoder(w).Encode(map[string]interface{}{"wishlisted": false})
 	} else {
+		if gameStatus == "released" {
+			json.NewEncoder(w).Encode(map[string]interface{}{"error": "Game is already released, install it instead!"})
+			return
+		}
 		db.DB.Conn.Exec("INSERT INTO wishlist (user_id, game_id) VALUES (?, ?)", userID, gameID)
 		json.NewEncoder(w).Encode(map[string]interface{}{"wishlisted": true})
 	}
@@ -1484,4 +1491,26 @@ func HandleReplyReport(w http.ResponseWriter, r *http.Request) {
 	if req.Status == "" { req.Status = "replied" }
 	db.DB.Conn.Exec("UPDATE reports SET admin_reply=?, status=? WHERE id=?", req.Reply, req.Status, req.ReportID)
 	json.NewEncoder(w).Encode(map[string]interface{}{"success": true})
+}
+
+func HandleNotifyWishlistRelease(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	rows, err := db.DB.Conn.Query(
+		`SELECT w.user_id, g.name FROM wishlist w JOIN games g ON w.game_id = g.id WHERE g.status = 'released'`)
+	if err != nil {
+		json.NewEncoder(w).Encode(map[string]interface{}{"notified": 0})
+		return
+	}
+	defer rows.Close()
+	count := 0
+	for rows.Next() {
+		var userID int
+		var gameName string
+		rows.Scan(&userID, &gameName)
+		db.DB.Conn.Exec("INSERT INTO notifications (game_id, title, message) VALUES (0, ?, ?)",
+			gameName+" is now available!", "The game you wishlisted, "+gameName+", has been released! Go install it now.")
+		db.DB.Conn.Exec("DELETE FROM wishlist WHERE user_id = ? AND game_id IN (SELECT id FROM games WHERE name = ? AND status = 'released')", userID, gameName)
+		count++
+	}
+	json.NewEncoder(w).Encode(map[string]interface{}{"notified": count})
 }

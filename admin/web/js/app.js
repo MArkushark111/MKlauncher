@@ -378,6 +378,7 @@ function addGameURL() {
     formData.append('tags', tags);
     formData.append('download_url', urls[0].url);
     formData.append('exe_path', exe_path);
+    formData.append('status', document.getElementById('url-game-status').value);
     if (urls.length > 1) formData.append('mirror_urls', JSON.stringify(urls.slice(1)));
     const coverFile = document.getElementById('url-game-cover').files[0];
     const bgFile = document.getElementById('url-game-bg').files[0];
@@ -831,6 +832,7 @@ function buildSummary() {
     const desc = document.getElementById('game-desc').value;
     const ver = document.getElementById('game-version').value;
     const cat = document.getElementById('game-category').value;
+    const status = document.getElementById('game-status').value;
     const tags = document.getElementById('game-tags').value;
     const folder = document.getElementById('game-folder').value;
     const exe = document.getElementById('game-exe').value;
@@ -839,6 +841,7 @@ function buildSummary() {
         <p><span class="label">Description: </span>${desc || 'None'}</p>
         <p><span class="label">Version: </span>${ver}</p>
         <p><span class="label">Category: </span>${cat || 'None'}</p>
+        <p><span class="label">Status: </span>${status}</p>
         <p><span class="label">Tags: </span>${tags || 'None'}</p>
         <p><span class="label">Folder files: </span>${document.getElementById('game-folder-files').files.length}</p>
         <p><span class="label">Game Folder: </span>${folder || 'Root'}</p>
@@ -964,6 +967,7 @@ async function submitGame() {
                 tags: document.getElementById('game-tags').value,
                 game_folder: document.getElementById('game-folder').value,
                 exe_path: document.getElementById('game-exe').value,
+                status: document.getElementById('game-status').value,
                 files: paths,
                 cover_path: coverPath,
                 bg_path: bgPath,
@@ -990,6 +994,7 @@ function resetAddForm() {
     document.getElementById('game-desc').value = '';
     document.getElementById('game-version').value = '1.0.0';
     document.getElementById('game-category').value = '';
+    document.getElementById('game-status').value = 'released';
     document.getElementById('game-tags').value = '';
     document.getElementById('game-folder').value = '';
     document.getElementById('game-exe').value = '';

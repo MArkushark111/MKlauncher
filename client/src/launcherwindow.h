@@ -127,6 +127,7 @@ private:
     QString gameInstallPath(const QString &name);
     void showGameDetail(const ServerGame &game);
     void setupLibraryTab();
+    void checkWishlistNotifications();
     void setupNewsTab();
     void setupChatTab();
     void loadNews();

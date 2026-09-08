@@ -90,6 +90,7 @@ func HandleAddGame(w http.ResponseWriter, r *http.Request) {
 		GameFolder:    r.FormValue("game_folder"),
 		ExePath:       r.FormValue("exe_path"),
 		ArchivePath:   r.FormValue("archive_path"),
+		Status:        r.FormValue("status"),
 	}
 
 	if game.Name == "" {
@@ -233,6 +234,7 @@ func HandleAddGameURL(w http.ResponseWriter, r *http.Request) {
 		DownloadURL: r.FormValue("download_url"),
 		StorageType: "url",
 		MirrorURLs:  r.FormValue("mirror_urls"),
+		Status:      r.FormValue("status"),
 	}
 	if game.Name == "" {
 		w.WriteHeader(http.StatusBadRequest)
@@ -307,6 +309,9 @@ func HandleUpdateGame(w http.ResponseWriter, r *http.Request) {
 	}
 	if r.FormValue("exe_path") != "" {
 		game.ExePath = r.FormValue("exe_path")
+	}
+	if r.FormValue("status") != "" {
+		game.Status = r.FormValue("status")
 	}
 
 	if _, fh, err := r.FormFile("cover"); err == nil {

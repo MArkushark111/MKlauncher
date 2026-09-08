@@ -176,6 +176,7 @@ func main() {
 	router.HandleFunc("/api/reports", api.RequireAuth(api.HandleSubmitReport)).Methods("POST")
 	router.HandleFunc("/api/reports", api.RequireAuth(api.HandleListReports)).Methods("GET")
 	router.HandleFunc("/api/admin/reports/reply", api.RequireAuth(api.HandleReplyReport)).Methods("POST")
+	router.HandleFunc("/api/admin/wishlist-notify", api.RequireAuth(api.HandleNotifyWishlistRelease)).Methods("POST")
 
 	router.PathPrefix("/covers/").HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		coversDir := filepath.Join(StorageDir, "covers")

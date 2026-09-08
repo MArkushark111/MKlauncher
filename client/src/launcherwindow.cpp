@@ -1293,6 +1293,7 @@ void LauncherWindow::onAuthResult(QNetworkReply *reply) {
 
         m_stack->setCurrentIndex(1);
         refreshGames();
+        QTimer::singleShot(2000, this, &LauncherWindow::checkWishlistNotifications);
     } else {
         m_statusLabel->setText(obj["error"].toString());
     }
@@ -1654,6 +1655,12 @@ void LauncherWindow::showGameDetail(const ServerGame &game) {
     versionLabel->setStyleSheet("color: #888888; font-size: 13px; background: transparent;");
     infoLayout->addWidget(versionLabel);
 
+    if (game.status == "coming_soon") {
+        auto *statusLabel = new QLabel("COMING SOON");
+        statusLabel->setStyleSheet("color: #ffaa00; font-size: 14px; font-weight: bold; background: transparent; letter-spacing: 2px;");
+        infoLayout->addWidget(statusLabel);
+    }
+
     QString sourceText = (game.storageType == "url") ? "Game Files: External URL" : "Game Files: Server Disk";
     QColor sourceColor = (game.storageType == "url") ? QColor("#ffaa00") : QColor("#00ff88");
     auto *sourceLabel = new QLabel(sourceText);
@@ -1757,6 +1764,18 @@ void LauncherWindow::showGameDetail(const ServerGame &game) {
             m_gameGrid->gameUninstall(game.id, game.name, localGame.installPath);
         });
         btnLayout->addWidget(uninstallBtn);
+    } else if (game.status == "coming_soon") {
+        auto *wishlistBtn = new QPushButton("WISHLIST - NOTIFY ME");
+        wishlistBtn->setObjectName("wishlistBtn");
+        wishlistBtn->setCursor(Qt::PointingHandCursor);
+        wishlistBtn->setStyleSheet(
+            "QPushButton#wishlistBtn { background-color: #ff4488; color: #000000; border: none; "
+            "border-radius: 6px; font-size: 14px; padding: 14px 48px; font-weight: bold; }"
+            "QPushButton#wishlistBtn:hover { background-color: #ff2266; }");
+        connect(wishlistBtn, &QPushButton::clicked, this, [this, game]() {
+            toggleWishlist(game.id);
+        });
+        btnLayout->addWidget(wishlistBtn);
     } else {
         auto *installBtn = new QPushButton(QString("INSTALL - %1").arg(m_gameGrid->formatSize(game.fileSize)));
         installBtn->setObjectName("installBtn");
@@ -1772,17 +1791,19 @@ void LauncherWindow::showGameDetail(const ServerGame &game) {
         btnLayout->addWidget(installBtn);
     }
 
-    auto *wishlistBtn = new QPushButton("WISHLIST");
-    wishlistBtn->setObjectName("wishlistBtn");
-    wishlistBtn->setCursor(Qt::PointingHandCursor);
-    wishlistBtn->setStyleSheet(
-        "QPushButton#wishlistBtn { background-color: transparent; color: #ff4488; border: 1px solid #ff4488; "
-        "border-radius: 6px; font-size: 13px; padding: 14px 24px; font-weight: bold; }"
-        "QPushButton#wishlistBtn:hover { background-color: #ff4488; color: #000000; }");
-    connect(wishlistBtn, &QPushButton::clicked, this, [this, game]() {
-        toggleWishlist(game.id);
-    });
-    btnLayout->addWidget(wishlistBtn);
+    if (game.status != "coming_soon") {
+        auto *wishlistBtn = new QPushButton("WISHLIST");
+        wishlistBtn->setObjectName("wishlistBtn");
+        wishlistBtn->setCursor(Qt::PointingHandCursor);
+        wishlistBtn->setStyleSheet(
+            "QPushButton#wishlistBtn { background-color: transparent; color: #ff4488; border: 1px solid #ff4488; "
+            "border-radius: 6px; font-size: 13px; padding: 14px 24px; font-weight: bold; }"
+            "QPushButton#wishlistBtn:hover { background-color: #ff4488; color: #000000; }");
+        connect(wishlistBtn, &QPushButton::clicked, this, [this, game]() {
+            toggleWishlist(game.id);
+        });
+        btnLayout->addWidget(wishlistBtn);
+    }
 
     if (installed) {
         auto *reportBtn = new QPushButton("REPORT PROBLEM");
@@ -2632,6 +2653,30 @@ void LauncherWindow::submitReport(int gameId, const QString &gameName, const QSt
             QMessageBox::information(this, "Report Sent", "Your report for \"" + gameName + "\" has been submitted. Thank you!");
         } else {
             QMessageBox::warning(this, "Report Failed", doc.object()["error"].toString());
+        }
+    });
+}
+
+void LauncherWindow::checkWishlistNotifications() {
+    if (m_serverUrl.isEmpty() || m_userToken.isEmpty()) return;
+    QNetworkRequest req(QUrl(m_serverUrl + "/api/notifications"));
+    req.setRawHeader("Authorization", ("Bearer " + m_userToken).toUtf8());
+    auto *reply = m_authManager->get(req);
+    connect(reply, &QNetworkReply::finished, this, [this, reply]() {
+        reply->deleteLater();
+        if (reply->error() != QNetworkReply::NoError) return;
+        QJsonDocument doc = QJsonDocument::fromJson(reply->readAll());
+        QJsonObject resp = doc.object();
+        if (resp["success"].toBool()) {
+            QJsonArray notifs = resp["notifications"].toArray();
+            for (auto n : notifs) {
+                QJsonObject notif = n.toObject();
+                QString title = notif["title"].toString();
+                QString msg = notif["message"].toString();
+                if (notif["read"].toBool() == false) {
+                    showNotification(title, msg);
+                }
+            }
         }
     });
 }

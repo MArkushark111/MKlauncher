@@ -31,6 +31,7 @@ type Game struct {
 	DownloadURL   string    `json:"download_url"`
 	StorageType   string    `json:"storage_type"`
 	MirrorURLs    string    `json:"mirror_urls"`
+	Status        string    `json:"status"`
 	CreatedAt     time.Time `json:"created_at"`
 	UpdatedAt     time.Time `json:"updated_at"`
 }

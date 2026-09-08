@@ -314,6 +314,7 @@ func (d *Database) migrate() error {
 	d.Conn.Exec("ALTER TABLE games ADD COLUMN download_url TEXT DEFAULT ''")
 	d.Conn.Exec("ALTER TABLE games ADD COLUMN storage_type TEXT DEFAULT 'disk'")
 	d.Conn.Exec("ALTER TABLE games ADD COLUMN mirror_urls TEXT DEFAULT ''")
+	d.Conn.Exec("ALTER TABLE games ADD COLUMN status TEXT DEFAULT 'released'")
 
 	d.Conn.Exec(`CREATE TABLE IF NOT EXISTS reports (
 		id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -390,14 +391,16 @@ func (d *Database) ListAdmins() ([]Admin, error) {
 }
 
 func (d *Database) AddGame(g *Game) error {
+	status := g.Status
+	if status == "" { status = "released" }
 	result, err := d.Conn.Exec(
 		`INSERT INTO games (name, description, version, category, tags, 
 		 cover_url, background_url, logo_url, wide_cover_url,
-		 archive_path, game_folder, exe_path, file_size, developer_id, is_public, download_url, storage_type, mirror_urls)
-		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		 archive_path, game_folder, exe_path, file_size, developer_id, is_public, download_url, storage_type, mirror_urls, status)
+		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 		g.Name, g.Description, g.Version, g.Category, g.Tags,
 		g.CoverURL, g.BackgroundURL, g.LogoURL, g.WideCoverURL,
-		g.ArchivePath, g.GameFolder, g.ExePath, g.FileSize, g.DeveloperID, g.IsPublic, g.DownloadURL, g.StorageType, g.MirrorURLs,
+		g.ArchivePath, g.GameFolder, g.ExePath, g.FileSize, g.DeveloperID, g.IsPublic, g.DownloadURL, g.StorageType, g.MirrorURLs, status,
 	)
 	if err != nil {
 		return err
@@ -419,11 +422,11 @@ func (d *Database) UpdateGame(g *Game) error {
 	_, err := d.Conn.Exec(
 		`UPDATE games SET name=?, description=?, version=?, category=?, tags=?,
 		 cover_url=?, background_url=?, logo_url=?, wide_cover_url=?,
-		 archive_path=?, game_folder=?, exe_path=?, file_size=?, updated_at=?
+		 archive_path=?, game_folder=?, exe_path=?, file_size=?, status=?, updated_at=?
 		 WHERE id=?`,
 		g.Name, g.Description, g.Version, g.Category, g.Tags,
 		g.CoverURL, g.BackgroundURL, g.LogoURL, g.WideCoverURL,
-		g.ArchivePath, g.GameFolder, g.ExePath, g.FileSize, time.Now(), g.ID,
+		g.ArchivePath, g.GameFolder, g.ExePath, g.FileSize, g.Status, time.Now(), g.ID,
 	)
 	return err
 }
@@ -439,11 +442,11 @@ func (d *Database) GetGame(id int) (*Game, error) {
 		`SELECT id, name, description, version, category, tags,
 		 cover_url, background_url, logo_url, wide_cover_url,
 		 archive_path, game_folder, exe_path, file_size, download_count,
-		 created_at, updated_at, COALESCE(download_url,''), COALESCE(storage_type,'disk'), COALESCE(mirror_urls,'') FROM games WHERE id = ?`, id,
+		 created_at, updated_at, COALESCE(download_url,''), COALESCE(storage_type,'disk'), COALESCE(mirror_urls,''), COALESCE(status,'released') FROM games WHERE id = ?`, id,
 	).Scan(&g.ID, &g.Name, &g.Description, &g.Version, &g.Category, &g.Tags,
 		&g.CoverURL, &g.BackgroundURL, &g.LogoURL, &g.WideCoverURL,
 		&g.ArchivePath, &g.GameFolder, &g.ExePath, &g.FileSize, &g.DownloadCount,
-		&g.CreatedAt, &g.UpdatedAt, &g.DownloadURL, &g.StorageType, &g.MirrorURLs)
+		&g.CreatedAt, &g.UpdatedAt, &g.DownloadURL, &g.StorageType, &g.MirrorURLs, &g.Status)
 	if err != nil {
 		return nil, err
 	}
@@ -455,7 +458,7 @@ func (d *Database) ListGames() ([]Game, error) {
 		`SELECT id, name, description, version, category, tags,
 		 cover_url, background_url, logo_url, wide_cover_url,
 		 archive_path, game_folder, exe_path, file_size, download_count,
-		 created_at, updated_at, COALESCE(download_url,''), COALESCE(storage_type,'disk'), COALESCE(mirror_urls,'') FROM games ORDER BY name`)
+		 created_at, updated_at, COALESCE(download_url,''), COALESCE(storage_type,'disk'), COALESCE(mirror_urls,''), COALESCE(status,'released') FROM games ORDER BY name`)
 	if err != nil {
 		return nil, err
 	}
@@ -467,7 +470,7 @@ func (d *Database) ListGames() ([]Game, error) {
 		rows.Scan(&g.ID, &g.Name, &g.Description, &g.Version, &g.Category, &g.Tags,
 			&g.CoverURL, &g.BackgroundURL, &g.LogoURL, &g.WideCoverURL,
 			&g.ArchivePath, &g.GameFolder, &g.ExePath, &g.FileSize, &g.DownloadCount,
-			&g.CreatedAt, &g.UpdatedAt, &g.DownloadURL, &g.StorageType, &g.MirrorURLs)
+			&g.CreatedAt, &g.UpdatedAt, &g.DownloadURL, &g.StorageType, &g.MirrorURLs, &g.Status)
 		games = append(games, g)
 	}
 	return games, nil

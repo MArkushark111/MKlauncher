@@ -78,6 +78,8 @@ void GameGrid::onGamesLoaded(QNetworkReply *reply) {
             game.downloadUrl = obj["download_url"].toString();
             game.storageType = obj["storage_type"].toString();
             game.mirrorUrls = obj["mirror_urls"].toString();
+            game.status = obj["status"].toString();
+            if (game.status.isEmpty()) game.status = "released";
             m_games.append(game);
         }
     }
@@ -196,6 +198,12 @@ QWidget* GameGrid::createGameCard(const ServerGame &game) {
     metaLabel->setStyleSheet("color: #888888; font-size: 11px; background: transparent;");
     infoLayout->addWidget(metaLabel);
 
+    if (game.status == "coming_soon") {
+        QLabel *statusLabel = new QLabel("COMING SOON", infoWidget);
+        statusLabel->setStyleSheet("color: #ffaa00; font-size: 10px; font-weight: bold; background: transparent; letter-spacing: 1px;");
+        infoLayout->addWidget(statusLabel);
+    }
+
     layout->addWidget(infoWidget);
 
     QWidget *btnWidget = new QWidget(card);
@@ -250,6 +258,17 @@ QWidget* GameGrid::createGameCard(const ServerGame &game) {
         });
 
         btnLayout->addWidget(menuBtn);
+    } else if (game.status == "coming_soon") {
+        QPushButton *wishlistBtn = new QPushButton("WISHLIST", btnWidget);
+        wishlistBtn->setObjectName("wishlistBtn");
+        wishlistBtn->setCursor(Qt::PointingHandCursor);
+        wishlistBtn->setStyleSheet(
+            "QPushButton#wishlistBtn { background-color: transparent; color: #ff4488; border: 1px solid #ff4488; border-radius: 4px; font-size: 12px; padding: 10px 24px; font-weight: bold; }"
+            "QPushButton#wishlistBtn:hover { background-color: #ff4488; color: #000000; }");
+        connect(wishlistBtn, &QPushButton::clicked, [this, game]() {
+            emit gameDetails(game);
+        });
+        btnLayout->addWidget(wishlistBtn);
     } else {
         QPushButton *downloadBtn = new QPushButton(
             QString("INSTALL - %1").arg(formatSize(game.fileSize)), btnWidget);
