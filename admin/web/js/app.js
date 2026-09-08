@@ -361,26 +361,18 @@ function addUrlRow() {
 }
 
 let browseTreeData = null;
+let browseCurrentPath = '';
 
-function browseLocalArchive() {
-    const fileInput = document.getElementById('url-browse-file');
-    if (!fileInput.files.length) { alert('Select an archive file first'); return; }
-    const file = fileInput.files[0];
+function browseServerFolder(path) {
+    path = path || document.getElementById('url-browse-path').value.trim() || 'storage/games';
     const status = document.getElementById('browse-url-status');
     const btn = document.getElementById('browse-url-btn');
     status.style.display = 'block';
     status.style.color = 'var(--accent)';
-    status.textContent = 'Reading archive: ' + file.name + '...';
+    status.textContent = 'Loading: ' + path + '...';
     btn.disabled = true;
 
-    const fd = new FormData();
-    fd.append('archive', file);
-
-    fetch('/api/archive/browse-url', {
-        method: 'POST',
-        headers: { 'Authorization': 'Bearer ' + authToken },
-        body: fd
-    }).then(r => r.json()).then(data => {
+    api('POST', '/api/archive/browse', { path }).then(data => {
         btn.disabled = false;
         if (data.error) {
             status.style.color = '#ff4444';
@@ -388,10 +380,9 @@ function browseLocalArchive() {
             return;
         }
         status.style.display = 'none';
-        const sizeMB = (data.size / (1024 * 1024)).toFixed(1);
-        document.getElementById('url-game-size').value = sizeMB;
-        browseTreeData = data.entries;
-        renderBrowseTree(data.entries, sizeMB);
+        browseCurrentPath = path;
+        document.getElementById('url-browse-path').value = path;
+        renderServerFolder(data.entries || [], path);
     }).catch(e => {
         btn.disabled = false;
         status.style.color = '#ff4444';
@@ -399,74 +390,67 @@ function browseLocalArchive() {
     });
 }
 
-function renderBrowseTree(entries, sizeMB) {
+function renderServerFolder(entries, currentPath) {
     const container = document.getElementById('url-tree-container');
     const tree = document.getElementById('url-tree');
     container.style.display = 'block';
     tree.innerHTML = '';
-    document.getElementById('selected-folder-label').textContent = 'none (click a folder)';
-    document.getElementById('selected-exe-label').textContent = 'none (click a .exe)';
+    document.getElementById('selected-folder-label').textContent = 'none';
+    document.getElementById('selected-exe-label').textContent = 'none';
 
-    const folders = entries.filter(e => e.isDir);
+    if (currentPath && currentPath !== 'storage/games') {
+        const parentPath = currentPath.split('/').slice(0, -1).join('/') || 'storage/games';
+        const upDiv = document.createElement('div');
+        upDiv.style.cssText = 'padding:3px 6px;margin:1px 0;border-radius:3px;font-size:12px;cursor:pointer;color:var(--accent)';
+        upDiv.textContent = '⬆️ .. (back to ' + parentPath + ')';
+        upDiv.onmouseenter = () => upDiv.style.background = 'rgba(0,255,136,0.1)';
+        upDiv.onmouseleave = () => upDiv.style.background = 'transparent';
+        upDiv.onclick = () => browseServerFolder(parentPath);
+        tree.appendChild(upDiv);
+    }
+
+    const dirs = entries.filter(e => e.isDir);
     const files = entries.filter(e => !e.isDir);
-    const all = [...folders, ...files];
-    all.forEach(entry => {
-        renderTreeItem(entry, tree, 0, entries);
-    });
-}
 
-function renderTreeItem(entry, parent, depth, allEntries) {
-    const div = document.createElement('div');
-    const pad = depth * 16;
-    div.style.cssText = 'padding-left:' + pad + 'px;cursor:pointer;padding:3px 6px;margin:1px 0;border-radius:3px;font-size:12px;';
-
-    if (entry.isDir) {
-        div.textContent = '📁 ' + entry.name + '/';
-        div.style.color = 'var(--text)';
+    dirs.forEach(dir => {
+        const div = document.createElement('div');
+        div.style.cssText = 'padding:3px 6px;margin:1px 0;border-radius:3px;font-size:12px;cursor:pointer;color:var(--text)';
+        div.textContent = '📁 ' + dir.name + '/';
         div.onmouseenter = () => div.style.background = 'rgba(0,255,136,0.1)';
         div.onmouseleave = () => { if (!div.dataset.selected) div.style.background = 'transparent'; };
+        div.dataset.type = 'folder';
         div.onclick = () => {
             document.querySelectorAll('#url-tree div[data-type="folder"]').forEach(d => { d.style.background = 'transparent'; d.dataset.selected = ''; });
             div.style.background = 'rgba(0,255,136,0.3)';
             div.dataset.selected = '1';
-            const relPath = entry.path.split('::').pop() || entry.path;
+            const fullPath = currentPath + '/' + dir.name;
+            document.getElementById('selected-folder-label').textContent = fullPath;
             document.getElementById('url-game-exe').value = '';
-            document.getElementById('selected-folder-label').textContent = relPath;
-            document.getElementById('selected-exe-label').textContent = 'none (click a .exe)';
+            document.getElementById('selected-exe-label').textContent = 'none';
         };
-        div.dataset.type = 'folder';
-        parent.appendChild(div);
+        div.ondblclick = () => browseServerFolder(currentPath + '/' + dir.name);
+        tree.appendChild(div);
+    });
 
-        const children = allEntries.filter(e => {
-            if (!e.isDir && e !== entry) {
-                const childPath = (e.path.split('::').pop() || e.path);
-                const parentPath = (entry.path.split('::').pop() || entry.path);
-                return childPath.startsWith(parentPath + '/') || childPath.startsWith(parentPath + '\\');
-            }
-            return false;
-        });
-        children.forEach(child => {
-            renderTreeItem(child, parent, depth + 1, allEntries);
-        });
-    } else {
-        const isExe = entry.name.toLowerCase().endsWith('.exe');
-        const sizeStr = entry.size > 1024 ? ' (' + (entry.size / (1024 * 1024)).toFixed(1) + ' MB)' : '';
-        div.textContent = (isExe ? '🎮 ' : '📄 ') + entry.name + sizeStr;
+    files.forEach(file => {
+        const isExe = file.name.toLowerCase().endsWith('.exe');
+        const sizeStr = file.size > 1024 ? ' (' + (file.size / (1024 * 1024)).toFixed(1) + ' MB)' : (file.size > 0 ? ' (' + file.size + ' B)' : '');
+        const div = document.createElement('div');
+        div.style.cssText = 'padding:3px 6px 3px 22px;margin:1px 0;border-radius:3px;font-size:12px;cursor:pointer;';
+        div.textContent = (isExe ? '🎮 ' : '📄 ') + file.name + sizeStr;
         div.style.color = isExe ? 'var(--accent)' : 'var(--text)';
         div.onmouseenter = () => div.style.background = 'rgba(0,255,136,0.15)';
         div.onmouseleave = () => { if (!div.dataset.selected) div.style.background = 'transparent'; };
+        div.dataset.type = 'exe';
         div.onclick = () => {
             document.querySelectorAll('#url-tree div[data-type="exe"]').forEach(d => { d.style.background = 'transparent'; d.dataset.selected = ''; });
             div.style.background = 'rgba(0,255,136,0.3)';
             div.dataset.selected = '1';
-            div.dataset.type = 'exe';
-            const fullPath = entry.path.split('::').pop() || entry.path;
-            document.getElementById('url-game-exe').value = fullPath;
-            document.getElementById('selected-exe-label').textContent = entry.name;
+            document.getElementById('url-game-exe').value = file.name;
+            document.getElementById('selected-exe-label').textContent = file.name;
         };
-        div.dataset.type = 'exe';
-        parent.appendChild(div);
-    }
+        tree.appendChild(div);
+    });
 }
 
 function addGameURL() {

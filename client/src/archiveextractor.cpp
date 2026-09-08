@@ -79,30 +79,46 @@ bool ArchiveExtractor::extract(const QString &archivePath, const QString &destDi
 }
 
 bool ArchiveExtractor::extractZip(const QString &archive, const QString &dest) {
+#ifdef Q_OS_WIN
+    QProcess *ps = new QProcess(this);
+    connect(ps, &QProcess::readyReadStandardOutput, this, &ArchiveExtractor::onProcessReadyRead);
+    connect(ps, &QProcess::readyReadStandardError, this, &ArchiveExtractor::onProcessReadyRead);
+    connect(ps, &QProcess::finished, this, &ArchiveExtractor::onProcessFinished);
+    m_process = ps;
+
+    QString psCmd = QString("Expand-Archive -Path '%1' -DestinationPath '%2' -Force").arg(
+        QDir::toNativeSeparators(archive), QDir::toNativeSeparators(dest));
+    qDebug() << "[EXTRACTOR] Running PowerShell:" << psCmd;
+    ps->start("powershell.exe", {"-NoProfile", "-NonInteractive", "-Command", psCmd});
+
+    if (!ps->waitForStarted()) {
+        m_extracting = false;
+        emit extractionError("Failed to start PowerShell for ZIP extraction");
+        ps->deleteLater();
+        m_process = nullptr;
+        return false;
+    }
+    return true;
+#else
     m_process = new QProcess(this);
     connect(m_process, &QProcess::readyReadStandardOutput, this, &ArchiveExtractor::onProcessReadyRead);
     connect(m_process, &QProcess::readyReadStandardError, this, &ArchiveExtractor::onProcessReadyRead);
     connect(m_process, &QProcess::finished, this, &ArchiveExtractor::onProcessFinished);
 
     QStringList args;
-#ifdef Q_OS_WIN
-    QString tool = findTool("7z");
-    args << "x" << "-y" << ("-o" + dest) << archive;
-#else
-    QString tool = "unzip";
     args << "-o" << archive << "-d" << dest;
-#endif
-    qDebug() << "[EXTRACTOR] Running:" << tool << args.join(" ");
-    m_process->start(tool, args);
+    qDebug() << "[EXTRACTOR] Running: unzip" << args.join(" ");
+    m_process->start("unzip", args);
 
     if (!m_process->waitForStarted()) {
         m_extracting = false;
-        emit extractionError("Failed to start extraction tool. Install 7-Zip or unzip.");
+        emit extractionError("Failed to start unzip");
         m_process->deleteLater();
         m_process = nullptr;
         return false;
     }
     return true;
+#endif
 }
 
 bool ArchiveExtractor::extractRar(const QString &archive, const QString &dest) {
@@ -140,20 +156,29 @@ bool ArchiveExtractor::extractRar(const QString &archive, const QString &dest) {
 bool ArchiveExtractor::extract7z(const QString &archive, const QString &dest) {
     m_process = new QProcess(this);
     connect(m_process, &QProcess::readyReadStandardOutput, this, &ArchiveExtractor::onProcessReadyRead);
+    connect(m_process, &QProcess::readyReadStandardError, this, &ArchiveExtractor::onProcessReadyRead);
     connect(m_process, &QProcess::finished, this, &ArchiveExtractor::onProcessFinished);
 
     QStringList args;
 #ifdef Q_OS_WIN
     QString tool = findTool("7z");
+    if (tool == "7z") {
+        m_extracting = false;
+        emit extractionError("7-Zip not found. Install 7-Zip to extract .7z files.");
+        m_process->deleteLater();
+        m_process = nullptr;
+        return false;
+    }
 #else
     QString tool = "7z";
 #endif
     args << "x" << "-y" << ("-o" + dest) << archive;
+    qDebug() << "[EXTRACTOR] Running:" << tool << args.join(" ");
     m_process->start(tool, args);
 
     if (!m_process->waitForStarted()) {
         m_extracting = false;
-        emit extractionError("Failed to start 7z. Install with: sudo apt install p7zip-full");
+        emit extractionError("Failed to start 7z");
         m_process->deleteLater();
         m_process = nullptr;
         return false;
