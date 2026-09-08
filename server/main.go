@@ -103,6 +103,7 @@ func main() {
 	router.HandleFunc("/api/archives/upload", api.RequireAuth(api.HandleUploadArchive)).Methods("POST")
 	router.HandleFunc("/api/archives/delete", api.RequireAuth(api.HandleDeleteArchive)).Methods("POST")
 	router.HandleFunc("/api/archive/browse", api.RequireAuth(api.HandleBrowseArchive)).Methods("POST")
+	router.HandleFunc("/api/archive/browse-url", api.RequireAuth(api.HandleBrowseRemoteURL)).Methods("POST")
 
 	router.HandleFunc("/api/admin/add", api.RequireAuth(api.HandleAddAdmin)).Methods("POST")
 	router.HandleFunc("/api/admin/{username}", api.RequireAuth(api.HandleRemoveAdmin)).Methods("DELETE")

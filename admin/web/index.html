@@ -328,13 +328,26 @@
                             </div>
                         </div>
                         <button class="btn" onclick="addUrlRow()" style="margin-bottom:12px">+ ADD MIRROR</button>
-                        <br>
+                        <div style="margin-bottom:16px;padding:12px;background:rgba(0,255,136,0.05);border:1px solid rgba(0,255,136,0.2);border-radius:8px">
+                            <p style="color:var(--text);margin-bottom:8px;font-size:13px;font-weight:600">BROWSE ARCHIVE CONTENTS</p>
+                            <p style="color:var(--text-dim);margin-bottom:8px;font-size:11px">Paste a download URL below and click Browse to preview archive contents, select game folder and exe automatically.</p>
+                            <div style="display:flex;gap:8px">
+                                <input type="text" id="url-browse-input" placeholder="Paste download URL here..." style="flex:1;padding:8px 12px;background:#1a1a2e;border:1px solid #333;border-radius:6px;color:var(--text);font-size:13px">
+                                <button class="btn btn-primary" onclick="browseRemoteURL()" id="browse-url-btn">BROWSE</button>
+                            </div>
+                            <div id="browse-url-status" style="color:var(--accent);font-size:12px;margin-top:8px;display:none"></div>
+                        </div>
+                        <div id="url-tree-container" style="display:none;margin-bottom:16px;padding:12px;background:#0d0d1a;border:1px solid #333;border-radius:8px">
+                            <p style="color:var(--text);margin-bottom:8px;font-size:13px;font-weight:600">ARCHIVE CONTENTS</p>
+                            <div id="url-tree" style="max-height:300px;overflow-y:auto;font-family:monospace;font-size:12px;color:var(--text-dim)"></div>
+                            <p style="color:var(--text-dim);font-size:11px;margin-top:8px">Click a file to set it as the exe path</p>
+                        </div>
                         <div class="form-group">
                             <label>EXE PATH (inside archive, or filename for .exe)</label>
                             <input type="text" id="url-game-exe" placeholder="Game.exe">
                         </div>
                         <div class="form-group">
-                            <label>FILE SIZE (MB)</label>
+                            <label>FILE SIZE (MB) <span style="color:var(--accent);font-size:11px">auto-filled if browsed</span></label>
                             <input type="number" id="url-game-size" placeholder="e.g. 600" min="0" step="0.1">
                         </div>
                         <div style="display:flex;gap:8px">

@@ -627,6 +627,81 @@ func listArchiveEntries(archivePath, prefix string) ([]map[string]interface{}, e
 	return entries, nil
 }
 
+func HandleBrowseRemoteURL(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+
+	var req struct {
+		URL string `json:"url"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req.URL == "" {
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(map[string]string{"error": "URL required"})
+		return
+	}
+
+	tmpFile, err := os.CreateTemp("", "browse-*.tmp")
+	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		json.NewEncoder(w).Encode(map[string]string{"error": "Cannot create temp file"})
+		return
+	}
+	tmpPath := tmpFile.Name()
+	tmpFile.Close()
+	defer os.Remove(tmpPath)
+
+	client := &http.Client{Timeout: 120 * time.Second}
+	req2, err := http.NewRequest("GET", req.URL, nil)
+	if err != nil {
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(map[string]string{"error": "Invalid URL"})
+		return
+	}
+	req2.Header.Set("User-Agent", "Mozilla/5.0")
+
+	resp, err := client.Do(req2)
+	if err != nil {
+		w.WriteHeader(http.StatusBadGateway)
+		json.NewEncoder(w).Encode(map[string]string{"error": "Cannot download: " + err.Error()})
+		return
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != 200 {
+		w.WriteHeader(http.StatusBadGateway)
+		json.NewEncoder(w).Encode(map[string]string{"error": fmt.Sprintf("HTTP %d", resp.StatusCode)})
+		return
+	}
+
+	out, err := os.Create(tmpPath)
+	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		json.NewEncoder(w).Encode(map[string]string{"error": "Cannot write temp file"})
+		return
+	}
+	written, err := io.Copy(out, resp.Body)
+	out.Close()
+	if err != nil {
+		os.Remove(tmpPath)
+		w.WriteHeader(http.StatusInternalServerError)
+		json.NewEncoder(w).Encode(map[string]string{"error": "Download failed: " + err.Error()})
+		return
+	}
+
+	entries, err := listArchiveEntries(tmpPath, "")
+	if err != nil {
+		os.Remove(tmpPath)
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(map[string]string{"error": "Cannot read archive: " + err.Error()})
+		return
+	}
+	os.Remove(tmpPath)
+
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"size":    written,
+		"entries": entries,
+	})
+}
+
 func HandleListArchives(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 

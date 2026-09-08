@@ -360,6 +360,103 @@ function addUrlRow() {
     list.appendChild(row);
 }
 
+let browseTreeData = null;
+
+function browseRemoteURL() {
+    let url = document.getElementById('url-browse-input').value.trim();
+    if (!url) {
+        const firstUrl = document.querySelector('#url-download-list .url-link-input');
+        if (firstUrl && firstUrl.value.trim()) {
+            url = firstUrl.value.trim();
+            document.getElementById('url-browse-input').value = url;
+        }
+    }
+    if (!url) { alert('Paste a download URL first'); return; }
+    const status = document.getElementById('browse-url-status');
+    const btn = document.getElementById('browse-url-btn');
+    status.style.display = 'block';
+    status.style.color = 'var(--accent)';
+    status.textContent = 'Downloading archive to preview... (this may take a while for large files)';
+    btn.disabled = true;
+
+    api('POST', '/api/archive/browse-url', { url }).then(data => {
+        btn.disabled = false;
+        if (data.error) {
+            status.style.color = '#ff4444';
+            status.textContent = 'Error: ' + data.error;
+            return;
+        }
+        status.style.display = 'none';
+        const sizeMB = (data.size / (1024 * 1024)).toFixed(1);
+        document.getElementById('url-game-size').value = sizeMB;
+        browseTreeData = data.entries;
+        renderBrowseTree(data.entries, sizeMB);
+    }).catch(e => {
+        btn.disabled = false;
+        status.style.color = '#ff4444';
+        status.textContent = 'Failed: ' + e.message;
+    });
+}
+
+function renderBrowseTree(entries, sizeMB) {
+    const container = document.getElementById('url-tree-container');
+    const tree = document.getElementById('url-tree');
+    container.style.display = 'block';
+    tree.innerHTML = '<div style="color:var(--accent);margin-bottom:8px;font-size:12px">Size: ' + sizeMB + ' MB | Click a .exe file to select it:</div>';
+
+    const topLevel = entries.filter(e => !e.path.includes('/'));
+    const nested = entries.filter(e => e.path.includes('/'));
+
+    topLevel.forEach(entry => {
+        renderTreeItem(entry, tree, 0, entries);
+    });
+    nested.forEach(entry => {
+        renderTreeItem(entry, tree, 0, entries);
+    });
+}
+
+function renderTreeItem(entry, parent, depth, allEntries) {
+    const div = document.createElement('div');
+    const pad = depth * 16;
+    div.style.cssText = 'padding-left:' + pad + 'px;cursor:pointer;padding:3px 6px;margin:1px 0;border-radius:3px;font-size:12px;';
+
+    if (entry.isDir) {
+        div.textContent = '📁 ' + entry.name + '/';
+        div.style.color = 'var(--text)';
+        div.onmouseenter = () => div.style.background = 'rgba(0,255,136,0.1)';
+        div.onmouseleave = () => div.style.background = 'transparent';
+        parent.appendChild(div);
+
+        const children = allEntries.filter(e => {
+            const prefix = entry.path.split('::').pop() || entry.path;
+            const childPrefix = (e.path.split('::').pop() || e.path);
+            return childPrefix.startsWith(prefix + '/') && childPrefix !== prefix;
+        });
+        children.forEach(child => {
+            const relativePath = (child.path.split('::').pop() || child.path);
+            const slashCount = (relativePath.match(/\//g) || []).length;
+            const parentSlashCount = (prefix.match(/\//g) || []).length;
+            if (slashCount === parentSlashCount + 1) {
+                renderTreeItem(child, parent, depth + 1, allEntries);
+            }
+        });
+    } else {
+        const isExe = entry.name.toLowerCase().endsWith('.exe');
+        const sizeStr = entry.size > 1024 ? ' (' + (entry.size / (1024 * 1024)).toFixed(1) + ' MB)' : '';
+        div.textContent = (isExe ? '🎮 ' : '📄 ') + entry.name + sizeStr;
+        div.style.color = isExe ? 'var(--accent)' : 'var(--text)';
+        div.onmouseenter = () => div.style.background = 'rgba(0,255,136,0.15)';
+        div.onmouseleave = () => div.style.background = 'transparent';
+        div.onclick = () => {
+            const fullPath = entry.path.split('::').pop() || entry.path;
+            document.getElementById('url-game-exe').value = fullPath;
+            document.querySelectorAll('#url-tree div').forEach(d => d.style.background = 'transparent');
+            div.style.background = 'rgba(0,255,136,0.3)';
+        };
+        parent.appendChild(div);
+    }
+}
+
 function addGameURL() {
     const name = document.getElementById('url-game-name').value.trim();
     const version = document.getElementById('url-game-version').value.trim();
