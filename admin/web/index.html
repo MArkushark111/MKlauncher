@@ -330,10 +330,10 @@
                         <button class="btn" onclick="addUrlRow()" style="margin-bottom:12px">+ ADD MIRROR</button>
                         <div style="margin-bottom:16px;padding:12px;background:rgba(0,255,136,0.05);border:1px solid rgba(0,255,136,0.2);border-radius:8px">
                             <p style="color:var(--text);margin-bottom:8px;font-size:13px;font-weight:600">BROWSE ARCHIVE CONTENTS</p>
-                            <p style="color:var(--text-dim);margin-bottom:8px;font-size:11px">Paste a download URL below and click Browse to preview archive contents, select game folder and exe automatically.</p>
-                            <div style="display:flex;gap:8px">
-                                <input type="text" id="url-browse-input" placeholder="Paste download URL here..." style="flex:1;padding:8px 12px;background:#1a1a2e;border:1px solid #333;border-radius:6px;color:var(--text);font-size:13px">
-                                <button class="btn btn-primary" onclick="browseRemoteURL()" id="browse-url-btn">BROWSE</button>
+                            <p style="color:var(--text-dim);margin-bottom:8px;font-size:11px">Upload an archive to preview its contents, select game folder and exe automatically.</p>
+                            <div style="display:flex;gap:8px;align-items:center">
+                                <input type="file" id="url-browse-file" accept=".zip,.rar,.7z,.tar,.gz,.tgz" style="flex:1;font-size:12px;color:var(--text)">
+                                <button class="btn btn-primary" onclick="browseLocalArchive()" id="browse-url-btn">BROWSE</button>
                             </div>
                             <div id="browse-url-status" style="color:var(--accent);font-size:12px;margin-top:8px;display:none"></div>
                         </div>

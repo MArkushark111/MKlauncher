@@ -362,24 +362,25 @@ function addUrlRow() {
 
 let browseTreeData = null;
 
-function browseRemoteURL() {
-    let url = document.getElementById('url-browse-input').value.trim();
-    if (!url) {
-        const firstUrl = document.querySelector('#url-download-list .url-link-input');
-        if (firstUrl && firstUrl.value.trim()) {
-            url = firstUrl.value.trim();
-            document.getElementById('url-browse-input').value = url;
-        }
-    }
-    if (!url) { alert('Paste a download URL first'); return; }
+function browseLocalArchive() {
+    const fileInput = document.getElementById('url-browse-file');
+    if (!fileInput.files.length) { alert('Select an archive file first'); return; }
+    const file = fileInput.files[0];
     const status = document.getElementById('browse-url-status');
     const btn = document.getElementById('browse-url-btn');
     status.style.display = 'block';
     status.style.color = 'var(--accent)';
-    status.textContent = 'Downloading archive to preview... (this may take a while for large files)';
+    status.textContent = 'Reading archive: ' + file.name + '...';
     btn.disabled = true;
 
-    api('POST', '/api/archive/browse-url', { url }).then(data => {
+    const fd = new FormData();
+    fd.append('archive', file);
+
+    fetch('/api/archive/browse-url', {
+        method: 'POST',
+        headers: { 'Authorization': 'Bearer ' + authToken },
+        body: fd
+    }).then(r => r.json()).then(data => {
         btn.disabled = false;
         if (data.error) {
             status.style.color = '#ff4444';
