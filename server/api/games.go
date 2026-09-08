@@ -143,7 +143,7 @@ func HandleAddGame(w http.ResponseWriter, r *http.Request) {
 		game.ArchivePath = archivePath
 		game.FileSize = written
 	}
-	if game.ArchivePath == "" {
+	if game.ArchivePath == "" && game.Status != "coming_soon" {
 		w.WriteHeader(http.StatusBadRequest)
 		json.NewEncoder(w).Encode(map[string]string{"error": "Select a game folder"})
 		return

@@ -108,6 +108,7 @@ func HandleFinalizeUpload(w http.ResponseWriter, r *http.Request) {
 		BgPath      string   `json:"bg_path"`
 		LogoPath    string   `json:"logo_path"`
 		WidePath    string   `json:"wide_path"`
+		Status      string   `json:"status"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || strings.TrimSpace(req.Name) == "" {
 		http.Error(w, "Invalid game metadata", http.StatusBadRequest)
@@ -115,13 +116,22 @@ func HandleFinalizeUpload(w http.ResponseWriter, r *http.Request) {
 	}
 	if req.Version == "" { req.Version = "1.0.0" }
 	base := filepath.Join("storage", "uploads", session)
-	archivePath, size, err := zipUploadFiles(base, req.Name, req.Version, req.Files)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
-		return
+
+	var archivePath string
+	var size int64
+	if req.Status == "coming_soon" || len(req.Files) == 0 {
+		gameDir := filepath.Join("storage", "games", sanitizeName(req.Name))
+		os.MkdirAll(gameDir, 0755)
+	} else {
+		var err error
+		archivePath, size, err = zipUploadFiles(base, req.Name, req.Version, req.Files)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
 	}
 
-	game := &db.Game{Name: req.Name, Description: req.Description, Version: req.Version, Category: req.Category, Tags: req.Tags, GameFolder: req.GameFolder, ExePath: req.ExePath, ArchivePath: archivePath, FileSize: size}
+	game := &db.Game{Name: req.Name, Description: req.Description, Version: req.Version, Category: req.Category, Tags: req.Tags, GameFolder: req.GameFolder, ExePath: req.ExePath, ArchivePath: archivePath, FileSize: size, Status: req.Status}
 
 	prefix := fmt.Sprintf("%d", timeNowUnix())
 	if req.CoverPath != "" {

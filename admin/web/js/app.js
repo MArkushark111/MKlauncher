@@ -360,16 +360,18 @@ function addGameURL() {
     const name = document.getElementById('url-game-name').value.trim();
     const version = document.getElementById('url-game-version').value.trim();
     const category = document.getElementById('url-game-category').value;
+    const status = document.getElementById('url-game-status').value;
     const desc = document.getElementById('url-game-desc').value.trim();
     const tags = document.getElementById('url-game-tags').value.trim();
     const exe_path = document.getElementById('url-game-exe').value.trim();
-    if (!name || !exe_path) { alert('Name and exe path are required'); return; }
+    if (!name) { alert('Game name is required'); return; }
+    if (status !== 'coming_soon' && !exe_path) { alert('Exe path is required'); return; }
     const urls = [];
     document.querySelectorAll('#url-download-list .url-row').forEach(row => {
         const link = row.querySelector('.url-link-input').value.trim();
         if (link) urls.push({ url: link, label: row.querySelector('.url-label-input').value.trim() || 'Mirror' });
     });
-    if (urls.length === 0) { alert('Add at least one download URL'); return; }
+    if (status !== 'coming_soon' && urls.length === 0) { alert('Add at least one download URL'); return; }
     const formData = new FormData();
     formData.append('name', name);
     formData.append('version', version || '1.0.0');
@@ -644,6 +646,9 @@ function nextStep(step) {
     if (step === 2 && !document.getElementById('game-name').value.trim()) {
         alert('Game name is required');
         return;
+    }
+    if (step === 2 && document.getElementById('game-status').value === 'coming_soon') {
+        step = 3;
     }
     document.getElementById('add-form-step-' + currentStep).classList.add('hidden');
     document.getElementById('add-form-step-' + step).classList.remove('hidden');
@@ -932,7 +937,8 @@ async function submitGame() {
     progress.classList.remove('hidden');
 
     const folderFiles = document.getElementById('game-folder-files').files;
-    if (folderFiles.length === 0) {
+    const isComingSoon = document.getElementById('game-status').value === 'coming_soon';
+    if (folderFiles.length === 0 && !isComingSoon) {
         alert('Select a game folder first');
         btn.disabled = false;
         progress.classList.add('hidden');
@@ -940,14 +946,17 @@ async function submitGame() {
     }
     const session = currentUploadSession || (crypto.randomUUID ? crypto.randomUUID() : Date.now().toString(36) + Math.random().toString(36).slice(2));
     currentUploadSession = session;
-    const files = Array.from(folderFiles);
-    const paths = files.map(file => file.webkitRelativePath || file.name);
-    filesUploadedBytes = 0;
-    filesTotalBytes = files.reduce((totalBytes, file) => totalBytes + file.size, 0);
+
     try {
-        document.getElementById('add-progress-text').textContent = 'Uploading game files...';
-        for (let index = 0; index < files.length; index++) {
-            await uploadFileWithRetry(session, files[index], paths[index], index, files.length);
+        if (!isComingSoon) {
+            const files = Array.from(folderFiles);
+            const paths = files.map(file => file.webkitRelativePath || file.name);
+            filesUploadedBytes = 0;
+            filesTotalBytes = files.reduce((totalBytes, file) => totalBytes + file.size, 0);
+            document.getElementById('add-progress-text').textContent = 'Uploading game files...';
+            for (let index = 0; index < files.length; index++) {
+                await uploadFileWithRetry(session, files[index], paths[index], index, files.length);
+            }
         }
 
         document.getElementById('add-progress-text').textContent = 'Uploading images...';
@@ -968,7 +977,7 @@ async function submitGame() {
                 game_folder: document.getElementById('game-folder').value,
                 exe_path: document.getElementById('game-exe').value,
                 status: document.getElementById('game-status').value,
-                files: paths,
+                files: isComingSoon ? [] : paths,
                 cover_path: coverPath,
                 bg_path: bgPath,
                 logo_path: logoPath,
