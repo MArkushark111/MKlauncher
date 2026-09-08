@@ -308,11 +308,19 @@ void GameGrid::onCoverLoaded(QNetworkReply *reply) {
     pixmap.loadFromData(imgData);
     reply->deleteLater();
 
-    if (pixmap.isNull()) return;
+    if (pixmap.isNull()) {
+        qDebug() << "[COVER] Invalid pixmap for game" << gameId << "size:" << imgData.size();
+        return;
+    }
     m_covers[gameId] = pixmap;
-	if (m_coverLabels.contains(gameId)) {
-		m_coverLabels[gameId]->setPixmap(pixmap.scaled(m_coverLabels[gameId]->size(), Qt::KeepAspectRatioByExpanding, Qt::SmoothTransformation));
-		m_coverLabels[gameId]->setText(QString());
+    if (m_coverLabels.contains(gameId)) {
+        QLabel *label = m_coverLabels[gameId];
+        QPixmap scaled = pixmap.scaled(label->width() > 0 ? label->width() : 280,
+                                       label->height() > 0 ? label->height() : 160,
+                                       Qt::KeepAspectRatioByExpanding, Qt::SmoothTransformation);
+        label->setPixmap(scaled);
+        label->setText(QString());
+        label->update();
     }
 }
 

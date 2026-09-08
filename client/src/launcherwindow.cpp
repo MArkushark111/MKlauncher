@@ -2561,6 +2561,122 @@ void LauncherWindow::setupLibraryTab() {
         }
     }
 
+    if (!m_userToken.isEmpty() && !m_serverUrl.isEmpty()) {
+        auto *wishlistHeader = new QLabel("WISHLIST");
+        wishlistHeader->setStyleSheet("color: #ff4488; font-size: 14px; font-weight: bold; letter-spacing: 2px; background: transparent; margin-top: 16px;");
+        layout->addWidget(wishlistHeader);
+
+        auto *wishlistContainer = new QWidget();
+        wishlistContainer->setStyleSheet("background: transparent;");
+        auto *wishlistLayout = new QVBoxLayout(wishlistContainer);
+        wishlistLayout->setContentsMargins(0, 8, 0, 0);
+        wishlistLayout->setSpacing(8);
+
+        auto *loadingLbl = new QLabel("Loading wishlist...");
+        loadingLbl->setStyleSheet("color: #555555; font-size: 12px; background: transparent;");
+        loadingLbl->setAlignment(Qt::AlignCenter);
+        wishlistLayout->addWidget(loadingLbl);
+
+        layout->addWidget(wishlistContainer);
+
+        QNetworkRequest req(QUrl(m_serverUrl + "/api/wishlist"));
+        req.setRawHeader("Authorization", "Bearer " + m_userToken.toUtf8());
+        req.setTransferTimeout(10000);
+        auto *reply = m_authManager->get(req);
+        connect(reply, &QNetworkReply::finished, this, [this, reply, wishlistLayout, loadingLbl]() {
+            reply->deleteLater();
+            loadingLbl->deleteLater();
+            if (reply->error() != QNetworkReply::NoError) return;
+            QJsonDocument doc = QJsonDocument::fromJson(reply->readAll());
+            QJsonArray items = doc.isArray() ? doc.array() : doc.object()["wishlist"].toArray();
+            if (items.isEmpty()) {
+                auto *emptyLbl = new QLabel("No games wishlisted yet");
+                emptyLbl->setAlignment(Qt::AlignCenter);
+                emptyLbl->setStyleSheet("color: #555555; font-size: 12px; background: transparent; padding: 12px;");
+                wishlistLayout->addWidget(emptyLbl);
+                return;
+            }
+            for (const QJsonValue &val : items) {
+                QJsonObject obj = val.toObject();
+                int gameId = obj["game_id"].toInt();
+                QString gameName = obj["name"].toString();
+                QString coverUrl = obj["cover_url"].toString();
+                QString version = obj["version"].toString();
+
+                auto *row = new QWidget();
+                row->setStyleSheet("background-color: #1a1a1a; border: 1px solid #2a2a2a; border-radius: 8px;");
+                auto *rowLayout = new QHBoxLayout(row);
+                rowLayout->setContentsMargins(12, 8, 12, 8);
+                rowLayout->setSpacing(12);
+
+                auto *wishCover = new QLabel();
+                wishCover->setFixedSize(48, 48);
+                wishCover->setStyleSheet("background-color: #111111; border-radius: 6px;");
+                wishCover->setAlignment(Qt::AlignCenter);
+                if (!coverUrl.isEmpty()) {
+                    QString url = coverUrl;
+                    if (!url.startsWith("http")) {
+                        if (url.startsWith("storage/")) url = url.mid(QString("storage/").length());
+                        url = m_serverUrl + "/" + url;
+                    }
+                    QNetworkRequest imgReq{QUrl(url)};
+                    imgReq.setTransferTimeout(10000);
+                    QNetworkReply *imgReply = m_authManager->get(imgReq);
+                    connect(imgReply, &QNetworkReply::finished, this, [wishCover, imgReply]() {
+                        imgReply->deleteLater();
+                        if (imgReply->error() == QNetworkReply::NoError) {
+                            QPixmap px;
+                            px.loadFromData(imgReply->readAll());
+                            if (!px.isNull()) wishCover->setPixmap(px.scaled(48, 48, Qt::KeepAspectRatioByExpanding, Qt::SmoothTransformation));
+                        }
+                    });
+                } else {
+                    wishCover->setText("GAME");
+                }
+                rowLayout->addWidget(wishCover);
+
+                auto *wishInfo = new QVBoxLayout();
+                wishInfo->setSpacing(2);
+                auto *wishName = new QLabel(gameName);
+                wishName->setStyleSheet("color: #e0e0e0; font-size: 13px; font-weight: bold; background: transparent;");
+                wishInfo->addWidget(wishName);
+                auto *wishMeta = new QLabel("v" + version + " | Coming Soon");
+                wishMeta->setStyleSheet("color: #ffaa00; font-size: 11px; background: transparent;");
+                wishInfo->addWidget(wishMeta);
+                rowLayout->addLayout(wishInfo);
+                rowLayout->addStretch();
+
+                auto *removeBtn = new QPushButton("REMOVE");
+                removeBtn->setObjectName("removeWishlistBtn");
+                removeBtn->setCursor(Qt::PointingHandCursor);
+                removeBtn->setStyleSheet(
+                    "QPushButton#removeWishlistBtn { background-color: transparent; color: #ff4444; border: 1px solid #ff4444; border-radius: 4px; font-size: 11px; padding: 6px 16px; font-weight: bold; }"
+                    "QPushButton#removeWishlistBtn:hover { background-color: #ff4444; color: #000000; }");
+                connect(removeBtn, &QPushButton::clicked, this, [this, gameId, row, wishlistLayout]() {
+                    QNetworkRequest req(QUrl(m_serverUrl + "/api/wishlist/toggle"));
+                    req.setRawHeader("Authorization", "Bearer " + m_userToken.toUtf8());
+                    req.setTransferTimeout(10000);
+                    auto *reply = m_authManager->post(req, QByteArray());
+                    connect(reply, &QNetworkReply::finished, this, [reply, row, wishlistLayout]() {
+                        reply->deleteLater();
+                        if (reply->error() == QNetworkReply::NoError) {
+                            row->deleteLater();
+                            if (wishlistLayout->count() == 0) {
+                                auto *emptyLbl = new QLabel("No games wishlisted yet");
+                                emptyLbl->setAlignment(Qt::AlignCenter);
+                                emptyLbl->setStyleSheet("color: #555555; font-size: 12px; background: transparent; padding: 12px;");
+                                wishlistLayout->addWidget(emptyLbl);
+                            }
+                        }
+                    });
+                });
+                rowLayout->addWidget(removeBtn);
+
+                wishlistLayout->addWidget(row);
+            }
+        });
+    }
+
     layout->addStretch();
     scroll->setWidget(content);
     outerLayout->addWidget(scroll);

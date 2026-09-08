@@ -333,6 +333,22 @@ func HandleUpdateGame(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if game.Status == "released" {
+		rows, err := db.DB.Conn.Query(
+			`SELECT w.user_id, g.name FROM wishlist w JOIN games g ON w.game_id = g.id WHERE g.id = ? AND g.status = 'released'`, game.ID)
+		if err == nil {
+			defer rows.Close()
+			for rows.Next() {
+				var userID int
+				var gameName string
+				rows.Scan(&userID, &gameName)
+				db.DB.Conn.Exec("INSERT INTO notifications (game_id, title, message) VALUES (?, ?, ?)",
+					game.ID, gameName+" is now available!", "The game you wishlisted, "+gameName+", has been released! Go install it now.")
+				db.DB.Conn.Exec("DELETE FROM wishlist WHERE user_id = ? AND game_id = ?", userID, game.ID)
+			}
+		}
+	}
+
 	json.NewEncoder(w).Encode(game)
 }
 
