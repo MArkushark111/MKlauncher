@@ -1053,9 +1053,10 @@ async function submitGame() {
     currentUploadSession = session;
 
     try {
+        let paths = [];
         if (!isComingSoon) {
             const files = Array.from(folderFiles);
-            const paths = files.map(file => file.webkitRelativePath || file.name);
+            paths = files.map(file => file.webkitRelativePath || file.name);
             filesUploadedBytes = 0;
             filesTotalBytes = files.reduce((totalBytes, file) => totalBytes + file.size, 0);
             document.getElementById('add-progress-text').textContent = 'Uploading game files...';
