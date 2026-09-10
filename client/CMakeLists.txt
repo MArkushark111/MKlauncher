@@ -16,6 +16,7 @@ set(SOURCES
     src/downloadmanager.cpp
     src/archiveextractor.cpp
     src/updater.cpp
+    src/hydralinks.cpp
 )
 
 set(HEADERS
@@ -28,6 +29,7 @@ set(HEADERS
     src/updater.h
     src/settings.h
     src/theme.h
+    src/hydralinks.h
 )
 
 if(WIN32)

@@ -23,6 +23,7 @@
 #include "localdb.h"
 #include "updater.h"
 #include "settings.h"
+#include "hydralinks.h"
 
 class LauncherWindow : public QMainWindow {
     Q_OBJECT
@@ -77,6 +78,7 @@ private:
     LocalDB *m_localDB;
     Updater *m_updater;
     Settings m_settings;
+    HydraLinks *m_hydraLinks;
 
     QNetworkAccessManager *m_authManager;
     QNetworkAccessManager *m_reviewManager;
@@ -146,6 +148,10 @@ private:
     void stopRunningGame();
     void onGameProcessFinished(int exitCode, QProcess::ExitStatus exitStatus);
     void submitReport(int gameId, const QString &gameName, const QString &description);
+    void showHydraSourcePicker(const QString &gameName, const QList<HydraSource> &sources, int gameId, const QString &serverUrl, qint64 serverSize);
+    void showHydraVersionPicker(const HydraSource &source, const QString &gameName, const QList<HydraDownload> &downloads, int gameId);
+    void pickHydraUri(int gameId, const QString &gameName, const HydraDownload &dl);
+    void startHydraDownload(int gameId, const QString &gameName, const QString &url, const QString &fileSizeStr);
 };
 
 #endif

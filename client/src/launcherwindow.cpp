@@ -36,8 +36,13 @@ LauncherWindow::LauncherWindow(QWidget *parent) : QMainWindow(parent) {
     m_uninstaller = new Uninstaller(this);
     m_localDB = new LocalDB(this);
     m_updater = new Updater(this);
+    m_hydraLinks = new HydraLinks(this);
     m_authManager = new QNetworkAccessManager(this);
     m_reviewManager = new QNetworkAccessManager(this);
+
+    connect(m_hydraLinks, &HydraLinks::sourcesLoaded, this, []() {
+        qDebug() << "[HYDRA] All sources loaded";
+    });
 
     m_stack = new QStackedWidget(this);
     setCentralWidget(m_stack);
@@ -1291,6 +1296,9 @@ void LauncherWindow::refreshGames() {
         m_authToken = m_settings.authToken();
     }
     m_gameGrid->loadGames(m_serverUrl, m_authToken);
+    if (!m_hydraLinks->isLoaded() && m_hydraLinks->sourceCount() == 0) {
+        m_hydraLinks->fetchAllSources();
+    }
 }
 
 void LauncherWindow::onGamePlay(int gameId, const QString &name, const QString &exePath, const QString &installPath) {
@@ -1360,6 +1368,14 @@ void LauncherWindow::stopRunningGame() {
 }
 
 void LauncherWindow::onGameDownload(int gameId, const QString &name, const QString &url, qint64 size) {
+    if (m_hydraLinks->isLoaded()) {
+        QList<HydraSource> sources = m_hydraLinks->sourcesForGame(name);
+        if (!sources.isEmpty()) {
+            showHydraSourcePicker(name, sources, gameId, url, size);
+            return;
+        }
+    }
+
     QString ext = ".zip";
     QString lowerUrl = url.toLower();
     if (lowerUrl.contains(".rar")) ext = ".rar";
@@ -1375,6 +1391,202 @@ void LauncherWindow::onGameDownload(int gameId, const QString &name, const QStri
     m_progressLabel->setText("Downloading: " + name);
 
     m_downloadManager->startDownload(gameId, name, QUrl(url), savePath);
+}
+
+void LauncherWindow::showHydraSourcePicker(const QString &gameName, const QList<HydraSource> &sources, int gameId, const QString &serverUrl, qint64 serverSize) {
+    QDialog dialog(this);
+    dialog.setWindowTitle("Choose Download Source");
+    dialog.setMinimumWidth(500);
+    dialog.setStyleSheet(
+        "QDialog { background-color: #0d0d1a; }"
+        "QLabel { color: #e0e0e0; font-size: 13px; }"
+        "QPushButton { background-color: #1a1a2e; color: #e0e0e0; border: 1px solid #333; border-radius: 6px; padding: 12px 16px; font-size: 13px; text-align: left; }"
+        "QPushButton:hover { background-color: #00ff88; color: #000000; border-color: #00ff88; }"
+        "QPushButton[serverBtn=\"true\"] { border-left: 3px solid #00ff88; }"
+    );
+
+    QVBoxLayout *layout = new QVBoxLayout(&dialog);
+    layout->setSpacing(8);
+
+    QLabel *title = new QLabel("Select download source for: <b style='color:#00ff88'>" + gameName + "</b>");
+    title->setStyleSheet("font-size: 15px; margin-bottom: 8px;");
+    layout->addWidget(title);
+
+    QPushButton *serverBtn = new QPushButton(
+        "🖥️ MKGames Server\n"
+        "Direct from your server" + (serverSize > 0 ? " — " + QString::number(serverSize / (1024*1024), 'f', 1) + " MB" : ""));
+    serverBtn->setProperty("serverBtn", true);
+    connect(serverBtn, &QPushButton::clicked, [&dialog, this, gameId, gameName, serverUrl, serverSize]() {
+        dialog.accept();
+        QString ext = ".zip";
+        QString lowerUrl = serverUrl.toLower();
+        if (lowerUrl.contains(".rar")) ext = ".rar";
+        else if (lowerUrl.contains(".7z")) ext = ".7z";
+        QString savePath = gameInstallPath(gameName) + ext;
+        m_currentDownloadGameId = gameId;
+        m_currentDownloadName = gameName;
+        m_progressBar->setVisible(true);
+        m_progressBar->setValue(0);
+        m_progressLabel->setText("Downloading: " + gameName);
+        m_downloadManager->startDownload(gameId, gameName, QUrl(serverUrl), savePath);
+    });
+    layout->addWidget(serverBtn);
+
+    for (const HydraSource &src : sources) {
+        HydraDownload matchingDl;
+        for (const HydraDownload &dl : src.downloads) {
+            if (HydraLinks::namesMatch(dl.title, gameName)) {
+                matchingDl = dl;
+                break;
+            }
+        }
+        if (matchingDl.uris.isEmpty()) continue;
+
+        QList<HydraDownload> allDls;
+        for (const HydraDownload &dl : src.downloads) {
+            if (HydraLinks::namesMatch(dl.title, gameName)) {
+                allDls.append(dl);
+            }
+        }
+
+        QString sizeInfo = matchingDl.fileSize.isEmpty() ? "" : " — " + matchingDl.fileSize;
+        QString countInfo = allDls.size() > 1 ? QString(" (%1 versions)").arg(allDls.size()) : "";
+        QPushButton *srcBtn = new QPushButton(
+            "📦 " + src.name + countInfo + "\n" +
+            matchingDl.title + sizeInfo);
+        connect(srcBtn, &QPushButton::clicked, [this, &dialog, src, allDls, gameName, gameId]() {
+            dialog.accept();
+            showHydraVersionPicker(src, gameName, allDls, gameId);
+        });
+        layout->addWidget(srcBtn);
+    }
+
+    QDialogButtonBox *cancelBox = new QDialogButtonBox(QDialogButtonBox::Cancel);
+    connect(cancelBox, &QDialogButtonBox::rejected, &dialog, &QDialog::reject);
+    layout->addWidget(cancelBox);
+
+    dialog.exec();
+}
+
+void LauncherWindow::showHydraVersionPicker(const HydraSource &source, const QString &gameName, const QList<HydraDownload> &downloads, int gameId) {
+    if (downloads.size() == 1) {
+        const HydraDownload &dl = downloads.first();
+        if (dl.uris.size() == 1) {
+            startHydraDownload(gameId, gameName, dl.uris.first(), dl.fileSize);
+            return;
+        }
+        pickHydraUri(gameId, gameName, dl);
+        return;
+    }
+
+    QDialog dialog(this);
+    dialog.setWindowTitle("Choose Version — " + source.name);
+    dialog.setMinimumWidth(550);
+    dialog.setStyleSheet(
+        "QDialog { background-color: #0d0d1a; }"
+        "QLabel { color: #e0e0e0; font-size: 13px; }"
+        "QPushButton { background-color: #1a1a2e; color: #e0e0e0; border: 1px solid #333; border-radius: 6px; padding: 12px 16px; font-size: 13px; text-align: left; }"
+        "QPushButton:hover { background-color: #00ff88; color: #000000; border-color: #00ff88; }"
+    );
+
+    QVBoxLayout *layout = new QVBoxLayout(&dialog);
+    layout->setSpacing(6);
+
+    QLabel *title = new QLabel("Select version from <b style='color:#00ff88'>" + source.name + "</b>");
+    title->setStyleSheet("font-size: 15px; margin-bottom: 8px;");
+    layout->addWidget(title);
+
+    QList<HydraDownload> sorted = downloads;
+    std::sort(sorted.begin(), sorted.end(), [](const HydraDownload &a, const HydraDownload &b) {
+        return a.uploadDate > b.uploadDate;
+    });
+
+    for (const HydraDownload &dl : sorted) {
+        QString sizeInfo = dl.fileSize.isEmpty() ? "" : " — " + dl.fileSize;
+        QString dateInfo = dl.uploadDate.isEmpty() ? "" : "\n📅 " + dl.uploadDate.left(10);
+        QPushButton *verBtn = new QPushButton(
+            "🎮 " + dl.title + sizeInfo + dateInfo);
+        connect(verBtn, &QPushButton::clicked, [this, &dialog, source, dl, gameName, gameId]() {
+            dialog.accept();
+            pickHydraUri(gameId, gameName, dl);
+        });
+        layout->addWidget(verBtn);
+    }
+
+    QDialogButtonBox *cancelBox = new QDialogButtonBox(QDialogButtonBox::Cancel);
+    connect(cancelBox, &QDialogButtonBox::rejected, &dialog, &QDialog::reject);
+    layout->addWidget(cancelBox);
+
+    dialog.exec();
+}
+
+void LauncherWindow::pickHydraUri(int gameId, const QString &gameName, const HydraDownload &dl) {
+    if (dl.uris.size() == 1) {
+        startHydraDownload(gameId, gameName, dl.uris.first(), dl.fileSize);
+        return;
+    }
+
+    QDialog dialog(this);
+    dialog.setWindowTitle("Choose Download Link");
+    dialog.setMinimumWidth(500);
+    dialog.setStyleSheet(
+        "QDialog { background-color: #0d0d1a; }"
+        "QLabel { color: #e0e0e0; font-size: 13px; }"
+        "QPushButton { background-color: #1a1a2e; color: #e0e0e0; border: 1px solid #333; border-radius: 6px; padding: 10px 14px; font-size: 12px; text-align: left; }"
+        "QPushButton:hover { background-color: #00ff88; color: #000000; border-color: #00ff88; }"
+    );
+
+    QVBoxLayout *layout = new QVBoxLayout(&dialog);
+    layout->setSpacing(6);
+
+    QLabel *title = new QLabel("Multiple mirrors for: <b style='color:#00ff88'>" + dl.title + "</b>");
+    title->setStyleSheet("font-size: 14px; margin-bottom: 8px;");
+    layout->addWidget(title);
+
+    for (const QString &uri : dl.uris) {
+        QString host = QUrl(uri).host();
+        QPushButton *uriBtn = new QPushButton("🔗 " + host + "\n" + uri.left(80) + "...");
+        connect(uriBtn, &QPushButton::clicked, [this, &dialog, gameId, gameName, uri, dl]() {
+            dialog.accept();
+            startHydraDownload(gameId, gameName, uri, dl.fileSize);
+        });
+        layout->addWidget(uriBtn);
+    }
+
+    QDialogButtonBox *cancelBox = new QDialogButtonBox(QDialogButtonBox::Cancel);
+    connect(cancelBox, &QDialogButtonBox::rejected, &dialog, &QDialog::reject);
+    layout->addWidget(cancelBox);
+
+    dialog.exec();
+}
+
+void LauncherWindow::startHydraDownload(int gameId, const QString &gameName, const QString &url, const QString &fileSizeStr) {
+    QString ext = ".rar";
+    QString lowerUrl = url.toLower();
+    if (lowerUrl.contains(".zip")) ext = ".zip";
+    else if (lowerUrl.contains(".7z")) ext = ".7z";
+    else if (lowerUrl.contains(".tar.gz") || lowerUrl.contains(".tgz")) ext = ".tar.gz";
+    QString savePath = gameInstallPath(gameName) + ext;
+
+    qint64 size = 0;
+    QString clean = fileSizeStr.trimmed().toUpper();
+    if (clean.contains("GB")) {
+        double val = clean.replace("GB", "").trimmed().toDouble();
+        size = (qint64)(val * 1024 * 1024 * 1024);
+    } else if (clean.contains("MB")) {
+        double val = clean.replace("MB", "").trimmed().toDouble();
+        size = (qint64)(val * 1024 * 1024);
+    }
+
+    m_currentDownloadGameId = gameId;
+    m_currentDownloadName = gameName;
+    qDebug() << "[HYDRA] Starting download:" << gameName << "URL:" << url << "Save:" << savePath;
+
+    m_progressBar->setVisible(true);
+    m_progressBar->setValue(0);
+    m_progressLabel->setText("Downloading: " + gameName);
+
+    m_downloadManager->startDownload(gameId, gameName, QUrl(url), savePath);
 }
 
 void LauncherWindow::onGameUpdate(int gameId, const QString &name, const QString &localVer, const QString &serverVer, const QString &url) {
