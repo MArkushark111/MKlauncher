@@ -27,7 +27,7 @@ class HydraLinks : public QObject {
 public:
     explicit HydraLinks(QObject *parent = nullptr);
 
-    void fetchAllSources();
+    void fetchAllSources(const QString &proxyBaseUrl);
     bool isLoaded() const { return m_loaded; }
     int sourceCount() const { return m_sources.size(); }
     QList<HydraSource> sources() const { return m_sources; }

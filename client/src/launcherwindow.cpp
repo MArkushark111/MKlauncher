@@ -1298,7 +1298,7 @@ void LauncherWindow::refreshGames() {
     }
     m_gameGrid->loadGames(m_serverUrl, m_authToken);
     if (!m_hydraLinks->isLoaded() && m_hydraLinks->sourceCount() == 0) {
-        m_hydraLinks->fetchAllSources();
+        m_hydraLinks->fetchAllSources(m_serverUrl);
     }
 }
 

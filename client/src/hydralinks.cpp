@@ -25,13 +25,14 @@ HydraLinks::HydraLinks(QObject *parent) : QObject(parent) {
     connect(m_manager, &QNetworkAccessManager::finished, this, &HydraLinks::onSourceReply);
 }
 
-void HydraLinks::fetchAllSources() {
+void HydraLinks::fetchAllSources(const QString &proxyBaseUrl) {
     m_sources.clear();
     m_loaded = false;
     m_pendingRequests = defaultSourceUrls().size();
 
     for (const QString &url : defaultSourceUrls()) {
-        QNetworkRequest request{QUrl(url)};
+        QUrl proxyUrl(proxyBaseUrl + "/api/hydra/sources?url=" + QUrl::toPercentEncoding(url));
+        QNetworkRequest request{proxyUrl};
         request.setTransferTimeout(30000);
         request.setRawHeader("User-Agent", "MKLauncher/1.0");
         m_manager->get(request);
