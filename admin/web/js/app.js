@@ -1336,6 +1336,67 @@ function applyAndRestartServer() {
     });
 }
 
+const HYDRA_SOURCE_URLS = [
+    'https://hydralinks.cloud/sources/fitgirl.json',
+    'https://hydralinks.cloud/sources/dodi.json',
+    'https://hydralinks.cloud/sources/steamrip.json',
+    'https://hydralinks.cloud/sources/gog.json',
+    'https://hydralinks.cloud/sources/onlinefix.json',
+    'https://hydralinks.cloud/sources/kaoskrew.json',
+    'https://hydralinks.cloud/sources/xatab.json',
+    'https://hydralinks.cloud/sources/empress.json',
+];
+
+async function refreshHydraSources() {
+    const status = document.getElementById('hydra-status');
+    status.style.color = '#ffaa00';
+    status.textContent = 'Fetching... (0/' + HYDRA_SOURCE_URLS.length + ')';
+
+    const allSources = [];
+    let loaded = 0;
+
+    for (const url of HYDRA_SOURCE_URLS) {
+        try {
+            status.textContent = 'Fetching... (' + (++loaded) + '/' + HYDRA_SOURCE_URLS.length + ') — ' + url.split('/').pop();
+            const resp = await fetch(url);
+            if (resp.ok) {
+                const data = await resp.json();
+                if (data && data.downloads && data.downloads.length > 0) {
+                    allSources.push(data);
+                }
+            } else {
+                console.warn('Hydra fetch failed:', url, resp.status);
+            }
+        } catch (e) {
+            console.warn('Hydra fetch error:', url, e.message);
+        }
+    }
+
+    if (allSources.length === 0) {
+        status.style.color = '#ff4444';
+        status.textContent = 'Failed to fetch any sources. Try refreshing the page first.';
+        return;
+    }
+
+    status.textContent = 'Saving ' + allSources.length + ' sources to server...';
+
+    try {
+        const result = await api('PUT', '/api/hydra/sources', allSources);
+        if (result.error) {
+            status.style.color = '#ff4444';
+            status.textContent = 'Server save failed: ' + result.error;
+            return;
+        }
+        status.style.color = '#00ff88';
+        let totalGames = 0;
+        for (const s of allSources) totalGames += (s.downloads || []).length;
+        status.textContent = 'Done! ' + allSources.length + ' sources, ' + totalGames + ' games cached.';
+    } catch (e) {
+        status.style.color = '#ff4444';
+        status.textContent = 'Server save failed: ' + e.message;
+    }
+}
+
 function wipeServer() {
     if (!confirm('WARNING: This will permanently delete ALL games, archives, covers, and reset the database.\n\nThis CANNOT be undone. Type "yes" in the next prompt to confirm.')) return;
     const confirm2 = prompt('Type YES to confirm full server wipe:');

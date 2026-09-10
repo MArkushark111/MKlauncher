@@ -621,6 +621,12 @@
                     <button class="btn btn-primary" onclick="saveConfig()">SAVE CONFIG</button>
                     <button class="btn btn-danger" onclick="applyAndRestartServer()">APPLY &amp; RESTART SERVER</button>
                 </div>
+                <div class="card">
+                    <h3>HYDRA SOURCES</h3>
+                    <p style="color:var(--text-dim);">Fetch game sources from hydralinks.cloud (runs in your browser to bypass Cloudflare). Cache is served to launcher clients.</p>
+                    <p id="hydra-status" style="color:var(--text-dim);font-size:12px;">Not loaded yet</p>
+                    <button class="btn btn-primary" onclick="refreshHydraSources()">REFRESH HYDRA SOURCES</button>
+                </div>
                 <div class="card" style="border-color:#ff4444;">
                     <h3 style="color:#ff4444;">DANGER ZONE</h3>
                     <p style="color:var(--text-dim);">Permanently delete ALL games, archives, covers, and reset the database. This cannot be undone.</p>

@@ -158,6 +158,7 @@ func main() {
 	router.HandleFunc("/api/leaderboard/{game_id:[0-9]+}", api.HandleGetLeaderboard).Methods("GET")
 	router.HandleFunc("/api/leaderboard/{game_id:[0-9]+}", api.RequireAuth(api.HandleUpdateScore)).Methods("POST")
 	router.HandleFunc("/api/hydra/sources", api.HandleGetHydraSources).Methods("GET")
+	router.HandleFunc("/api/hydra/sources", api.RequireAuth(api.HandleUpdateHydraSources)).Methods("PUT")
 	router.HandleFunc("/api/chat", api.RequireAuth(api.HandleGetChatMessages)).Methods("GET")
 	router.HandleFunc("/api/chat", api.RequireAuth(api.HandleSendChatMessage)).Methods("POST")
 	router.HandleFunc("/api/friends/online", api.RequireAuth(api.HandleGetFriendsOnline)).Methods("GET")

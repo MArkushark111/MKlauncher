@@ -25,18 +25,15 @@ HydraLinks::HydraLinks(QObject *parent) : QObject(parent) {
     connect(m_manager, &QNetworkAccessManager::finished, this, &HydraLinks::onSourceReply);
 }
 
-void HydraLinks::fetchAllSources(const QString &proxyBaseUrl) {
+void HydraLinks::fetchAllSources(const QString &serverUrl) {
     m_sources.clear();
     m_loaded = false;
-    m_pendingRequests = defaultSourceUrls().size();
 
-    for (const QString &url : defaultSourceUrls()) {
-        QUrl proxyUrl(proxyBaseUrl + "/api/hydra/sources?url=" + QUrl::toPercentEncoding(url));
-        QNetworkRequest request{proxyUrl};
-        request.setTransferTimeout(30000);
-        request.setRawHeader("User-Agent", "MKLauncher/1.0");
-        m_manager->get(request);
-    }
+    QNetworkRequest request(QUrl(serverUrl + "/api/hydra/sources"));
+    request.setTransferTimeout(30000);
+    request.setRawHeader("User-Agent", "MKLauncher/1.0");
+    m_manager->get(request);
+    m_pendingRequests = 1;
 }
 
 void HydraLinks::onSourceReply(QNetworkReply *reply) {
@@ -44,14 +41,49 @@ void HydraLinks::onSourceReply(QNetworkReply *reply) {
 
     if (reply->error() == QNetworkReply::NoError) {
         QByteArray data = reply->readAll();
-        parseSource(data, url);
+        QJsonDocument doc = QJsonDocument::fromJson(data);
+        if (doc.isArray()) {
+            for (const QJsonValue &val : doc.array()) {
+                QJsonObject obj = val.toObject();
+                HydraSource source;
+                source.name = obj["name"].toString();
+                source.url = url;
+                QJsonArray downloads = obj["downloads"].toArray();
+                for (const QJsonValue &dv : downloads) {
+                    QJsonObject dObj = dv.toObject();
+                    HydraDownload dl;
+                    dl.title = dObj["title"].toString();
+                    dl.fileSize = dObj["fileSize"].toString();
+                    dl.uploadDate = dObj["uploadDate"].toString();
+                    dl.repackLinkSource = dObj["repackLinkSource"].toString();
+                    QJsonArray uris = dObj["uris"].toArray();
+                    for (const QJsonValue &u : uris) {
+                        QString uri = u.toString().trimmed();
+                        if (!uri.isEmpty()) dl.uris.append(uri);
+                    }
+                    if (!dl.title.isEmpty() && !dl.uris.isEmpty()) {
+                        source.downloads.append(dl);
+                    }
+                }
+                std::sort(source.downloads.begin(), source.downloads.end(),
+                    [](const HydraDownload &a, const HydraDownload &b) {
+                        return a.title.toLower() < b.title.toLower();
+                    });
+                if (!source.downloads.isEmpty()) {
+                    qDebug() << "[HYDRA] Loaded source:" << source.name << source.downloads.size() << "games";
+                    m_sources.append(source);
+                }
+            }
+        } else if (doc.isObject()) {
+            parseSource(data, url);
+        }
     } else {
-        qDebug() << "[HYDRA] Failed to load source:" << url << reply->errorString();
+        qDebug() << "[HYDRA] Failed to load sources:" << url << reply->errorString();
     }
 
     reply->deleteLater();
     m_pendingRequests--;
-    emit progress(defaultSourceUrls().size() - m_pendingRequests, defaultSourceUrls().size());
+    emit progress(1 - m_pendingRequests, 1);
 
     if (m_pendingRequests <= 0) {
         m_loaded = true;

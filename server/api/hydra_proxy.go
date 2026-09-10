@@ -1,164 +1,72 @@
 package api
 
 import (
-	"fmt"
+	"encoding/json"
 	"io"
 	"log"
 	"net/http"
+	"os"
+	"path/filepath"
 	"sync"
-	"time"
 )
+
+const hydraCacheFile = "/var/lib/mkgames/hydra_sources.json"
 
 var (
-	hydraCache     = make(map[string]hydraCacheEntry)
-	hydraCacheLock sync.Mutex
+	hydraData     []byte
+	hydraDataLock sync.RWMutex
 )
 
-type hydraCacheEntry struct {
-	data      []byte
-	expiresAt time.Time
-}
-
-var hydraSourceUrls = []string{
-	"https://hydralinks.cloud/sources/fitgirl.json",
-	"https://hydralinks.cloud/sources/dodi.json",
-	"https://hydralinks.cloud/sources/steamrip.json",
-	"https://hydralinks.cloud/sources/gog.json",
-	"https://hydralinks.cloud/sources/onlinefix.json",
-	"https://hydralinks.cloud/sources/kaoskrew.json",
-	"https://hydralinks.cloud/sources/xatab.json",
-	"https://hydralinks.cloud/sources/empress.json",
+func init() {
+	data, err := os.ReadFile(hydraCacheFile)
+	if err == nil {
+		hydraData = data
+		log.Printf("[HYDRA] Loaded %d bytes from cache", len(data))
+	}
 }
 
 func HandleGetHydraSources(w http.ResponseWriter, r *http.Request) {
-	sourceURL := r.URL.Query().Get("url")
-	if sourceURL == "" {
-		handleAllHydraSources(w, r)
-		return
-	}
+	hydraDataLock.RLock()
+	defer hydraDataLock.RUnlock()
 
-	hydraCacheLock.Lock()
-	cached, ok := hydraCache[sourceURL]
-	hydraCacheLock.Unlock()
-
-	if ok && time.Now().Before(cached.expiresAt) {
+	if len(hydraData) == 0 {
 		w.Header().Set("Content-Type", "application/json")
-		w.Header().Set("X-Cache", "hit")
-		w.Write(cached.data)
+		w.Write([]byte("[]"))
 		return
 	}
-
-	client := &http.Client{Timeout: 30 * time.Second}
-	req, err := http.NewRequest("GET", sourceURL, nil)
-	if err != nil {
-		http.Error(w, "bad url", http.StatusBadRequest)
-		return
-	}
-	req.Header.Set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36")
-	req.Header.Set("Accept", "application/json, text/plain, */*")
-	req.Header.Set("Accept-Language", "en-US,en;q=0.9")
-
-	resp, err := client.Do(req)
-	if err != nil {
-		log.Printf("[HYDRA-PROXY] Failed to fetch %s: %v", sourceURL, err)
-		http.Error(w, "upstream error", http.StatusBadGateway)
-		return
-	}
-	defer resp.Body.Close()
-
-	data, err := io.ReadAll(resp.Body)
-	if err != nil {
-		http.Error(w, "read error", http.StatusInternalServerError)
-		return
-	}
-
-	if resp.StatusCode != 200 {
-		log.Printf("[HYDRA-PROXY] Upstream returned %d for %s", resp.StatusCode, sourceURL)
-		http.Error(w, fmt.Sprintf(`{"error":"upstream %d","url":"%s"}`, resp.StatusCode, sourceURL), http.StatusBadGateway)
-		return
-	}
-
-	hydraCacheLock.Lock()
-	hydraCache[sourceURL] = hydraCacheEntry{data: data, expiresAt: time.Now().Add(1 * time.Hour)}
-	hydraCacheLock.Unlock()
 
 	w.Header().Set("Content-Type", "application/json")
-	w.Header().Set("X-Cache", "miss")
-	w.Write(data)
+	w.Write(hydraData)
 }
 
-func handleAllHydraSources(w http.ResponseWriter, r *http.Request) {
-	type sourceResult struct {
-		URL  string `json:"url"`
-		Data []byte `json:"-"`
-		Err  string `json:"error,omitempty"`
+func HandleUpdateHydraSources(w http.ResponseWriter, r *http.Request) {
+	body, err := io.ReadAll(r.Body)
+	if err != nil {
+		http.Error(w, "read error", http.StatusBadRequest)
+		return
 	}
 
-	results := make([]sourceResult, len(hydraSourceUrls))
-	var wg sync.WaitGroup
-
-	for i, url := range hydraSourceUrls {
-		wg.Add(1)
-		go func(idx int, srcURL string) {
-			defer wg.Done()
-
-			hydraCacheLock.Lock()
-			cached, ok := hydraCache[srcURL]
-			hydraCacheLock.Unlock()
-
-			if ok && time.Now().Before(cached.expiresAt) {
-				results[idx] = sourceResult{URL: srcURL, Data: cached.data}
-				return
-			}
-
-			client := &http.Client{Timeout: 30 * time.Second}
-			req, err := http.NewRequest("GET", srcURL, nil)
-			if err != nil {
-				results[idx] = sourceResult{URL: srcURL, Err: err.Error()}
-				return
-			}
-			req.Header.Set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36")
-			req.Header.Set("Accept", "application/json, text/plain, */*")
-			req.Header.Set("Accept-Language", "en-US,en;q=0.9")
-
-			resp, err := client.Do(req)
-			if err != nil {
-				results[idx] = sourceResult{URL: srcURL, Err: err.Error()}
-				return
-			}
-			defer resp.Body.Close()
-
-			data, err := io.ReadAll(resp.Body)
-			if err != nil {
-				results[idx] = sourceResult{URL: srcURL, Err: err.Error()}
-				return
-			}
-
-			if resp.StatusCode == 200 {
-				hydraCacheLock.Lock()
-				hydraCache[srcURL] = hydraCacheEntry{data: data, expiresAt: time.Now().Add(1 * time.Hour)}
-				hydraCacheLock.Unlock()
-			}
-
-			results[idx] = sourceResult{URL: srcURL, Data: data}
-		}(i, url)
+	var sources []json.RawMessage
+	if err := json.Unmarshal(body, &sources); err != nil {
+		http.Error(w, "invalid JSON: "+err.Error(), http.StatusBadRequest)
+		return
 	}
 
-	wg.Wait()
+	if err := os.MkdirAll(filepath.Dir(hydraCacheFile), 0755); err != nil {
+		log.Printf("[HYDRA] Failed to create cache dir: %v", err)
+	}
 
+	if err := os.WriteFile(hydraCacheFile, body, 0644); err != nil {
+		log.Printf("[HYDRA] Failed to write cache: %v", err)
+		http.Error(w, "write error", http.StatusInternalServerError)
+		return
+	}
+
+	hydraDataLock.Lock()
+	hydraData = body
+	hydraDataLock.Unlock()
+
+	log.Printf("[HYDRA] Updated cache with %d sources", len(sources))
 	w.Header().Set("Content-Type", "application/json")
-	w.Write([]byte("["))
-	first := true
-	for _, res := range results {
-		if res.Err != "" || len(res.Data) == 0 {
-			log.Printf("[HYDRA-PROXY] Skipping %s: err=%s", res.URL, res.Err)
-			continue
-		}
-		if !first {
-			w.Write([]byte(","))
-		}
-		first = false
-		w.Write(res.Data)
-	}
-	w.Write([]byte("]"))
+	w.Write([]byte(`{"ok":true,"sources":` + string(len(sources)) + `}`))
 }
