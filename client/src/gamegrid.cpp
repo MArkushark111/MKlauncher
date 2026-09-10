@@ -1,10 +1,12 @@
 #include "gamegrid.h"
 #include "theme.h"
 #include "localdb.h"
+#include "hydralinks.h"
 #include <QNetworkRequest>
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QJsonArray>
+#include <QSet>
 #include <QFile>
 #include <QDir>
 #include <QDesktopServices>
@@ -41,6 +43,53 @@ void GameGrid::loadGames(const QString &serverUrl, const QString &token) {
     request.setRawHeader("Authorization", "Bearer " + token.toUtf8());
     request.setTransferTimeout(15000);
     m_apiManager->get(request);
+}
+
+void GameGrid::addHydraGames(const QList<HydraSource> &sources) {
+    m_hydraSources = sources;
+    mergeHydraGames();
+}
+
+void GameGrid::mergeHydraGames() {
+    QSet<QString> existingNames;
+    for (const ServerGame &g : m_games) {
+        existingNames.insert(g.name.toLower().trimmed());
+    }
+
+    QSet<QString> addedNames;
+
+    for (const HydraSource &src : m_hydraSources) {
+        for (const HydraDownload &dl : src.downloads) {
+            QString name = dl.title.trimmed();
+            QString nameLower = name.toLower();
+
+            if (existingNames.contains(nameLower) || addedNames.contains(nameLower)) continue;
+            addedNames.insert(nameLower);
+
+            ServerGame game;
+            game.id = -(qHash(name) % 900000 + 100000);
+            game.name = name;
+            game.description = "via " + src.name;
+            game.version = dl.uploadDate.left(10);
+            game.category = "hydra";
+            game.tags = src.name;
+            game.fileSize = 0;
+            game.downloadUrl = dl.uris.isEmpty() ? "" : dl.uris.first();
+            game.storageType = "hydra";
+            game.status = "released";
+
+            if (!dl.fileSize.isEmpty()) {
+                QString clean = dl.fileSize.trimmed().toUpper();
+                if (clean.contains("GB")) {
+                    game.fileSize = (qint64)(clean.replace("GB","").trimmed().toDouble() * 1024 * 1024 * 1024);
+                } else if (clean.contains("MB")) {
+                    game.fileSize = (qint64)(clean.replace("MB","").trimmed().toDouble() * 1024 * 1024);
+                }
+            }
+
+            m_games.append(game);
+        }
+    }
 }
 
 void GameGrid::onGamesLoaded(QNetworkReply *reply) {
@@ -85,7 +134,7 @@ void GameGrid::onGamesLoaded(QNetworkReply *reply) {
         }
     }
 
-    emit gamesLoadError(QString());
+    mergeHydraGames();
     buildGrid();
 }
 
@@ -167,7 +216,11 @@ QWidget* GameGrid::createGameCard(const ServerGame &game) {
     coverLabel->setFixedHeight(160);
     coverLabel->setStyleSheet("background-color: #111111; border-top-left-radius: 12px; border-top-right-radius: 12px; color: #555555; font-size: 12px;");
     coverLabel->setAlignment(Qt::AlignCenter);
-    coverLabel->setText("LOADING...");
+    if (game.storageType == "hydra") {
+        coverLabel->setText(game.name);
+    } else {
+        coverLabel->setText("LOADING...");
+    }
     layout->addWidget(coverLabel);
     m_coverLabels[game.id] = coverLabel;
 
@@ -287,7 +340,7 @@ QWidget* GameGrid::createGameCard(const ServerGame &game) {
             "QPushButton#installBtn:hover { background-color: #e0e0e0; }");
         connect(downloadBtn, &QPushButton::clicked, [this, game]() {
             QString dlUrl;
-            if (game.storageType == "url" && !game.downloadUrl.isEmpty()) {
+            if (!game.downloadUrl.isEmpty() && (game.storageType == "url" || game.storageType == "hydra")) {
                 dlUrl = game.downloadUrl;
             } else {
                 dlUrl = m_serverUrl + "/api/games/" + QString::number(game.id) + "/download";

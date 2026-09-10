@@ -30,6 +30,7 @@ public:
     void fetchAllSources();
     bool isLoaded() const { return m_loaded; }
     int sourceCount() const { return m_sources.size(); }
+    QList<HydraSource> sources() const { return m_sources; }
 
     QList<HydraSource> sourcesForGame(const QString &gameName) const;
     QStringList allGameNames() const;

@@ -17,6 +17,7 @@
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QJsonArray>
+#include "hydralinks.h"
 
 struct ServerGame {
     int id = 0;
@@ -48,6 +49,7 @@ public:
     explicit GameGrid(QWidget *parent = nullptr);
 
     void loadGames(const QString &serverUrl, const QString &token);
+    void addHydraGames(const QList<HydraSource> &sources);
     void refreshGrid();
     QList<ServerGame> games() const { return m_games; }
     void filterByText(const QString &text);
@@ -75,6 +77,7 @@ private:
 
 private:
     QList<ServerGame> m_games;
+    QList<HydraSource> m_hydraSources;
     QMap<int, QPixmap> m_covers;
     QString m_serverUrl;
     QString m_token;
@@ -85,6 +88,7 @@ private:
     QString m_categoryFilter;
 
     void buildGrid();
+    void mergeHydraGames();
     QWidget* createGameCard(const ServerGame &game);
 
 public:

@@ -40,8 +40,9 @@ LauncherWindow::LauncherWindow(QWidget *parent) : QMainWindow(parent) {
     m_authManager = new QNetworkAccessManager(this);
     m_reviewManager = new QNetworkAccessManager(this);
 
-    connect(m_hydraLinks, &HydraLinks::sourcesLoaded, this, []() {
-        qDebug() << "[HYDRA] All sources loaded";
+    connect(m_hydraLinks, &HydraLinks::sourcesLoaded, this, [this]() {
+        qDebug() << "[HYDRA] All sources loaded, adding to grid";
+        m_gameGrid->addHydraGames(m_hydraLinks->sources());
     });
 
     m_stack = new QStackedWidget(this);
